@@ -10,3 +10,5 @@ services/ml-fastapi/**/*.pyc
 services/ml-fastapi/data/
 services/bridge-dotnet/bin/
 services/bridge-dotnet/obj/
+services/bridge-dotnet.tests/bin/
+services/bridge-dotnet.tests/obj/
