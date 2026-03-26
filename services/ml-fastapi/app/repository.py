@@ -144,3 +144,35 @@ class DatasetRepository:
             (dataset_id,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def get_frame(self, dataset_id: int, frame_id: str) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                frames.frame_id,
+                frames.dataset_id,
+                frames.image_path,
+                frames.latitude,
+                frames.longitude,
+                frames.heading_degrees,
+                frames.timestamp,
+                frames.image_width,
+                frames.image_height,
+                frames.pitch_degrees,
+                frames.roll_degrees,
+                frames.camera_intrinsics_json,
+                frames.sequence_id,
+                frames.depth_path,
+                datasets.source_path AS dataset_source_path
+            FROM {FRAMES_TABLE_NAME} AS frames
+            INNER JOIN {DATASETS_TABLE_NAME} AS datasets
+                ON datasets.id = frames.dataset_id
+            WHERE frames.dataset_id = ?
+              AND frames.frame_id = ?
+            """,
+            (dataset_id, frame_id),
+        ).fetchone()
+        if row is None:
+            raise KeyError((dataset_id, frame_id))
+
+        return dict(row)

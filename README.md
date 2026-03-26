@@ -1,6 +1,6 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 2 local runtime for the planned geospatial AI demo platform.
+Slice 4 spatial browsing workspace for the planned geospatial AI demo platform.
 
 ## Specification Docs
 
@@ -54,3 +54,14 @@ FastAPI now supports the Slice 3 dataset-loading flow:
 - `GET /datasets/{dataset_id}/frames`
 
 By default, the loader targets `data/raw/a2d2-subset/` and supplements missing GPS and orientation metadata from `data/raw/a2d2-preview.tar` when needed for the extracted A2D2 subset.
+
+## Slice 4 Spatial Browsing
+
+The frontend now loads stored datasets and renders frame markers from persisted coordinates so you can browse the dataset spatially before ML overlays are added.
+
+Additional browsing endpoints:
+
+- `GET /datasets/{dataset_id}/frames/{frame_id}`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/preview`
+
+The preview panel is driven from the selected map marker and displays the stored image plus key metadata for the chosen frame.

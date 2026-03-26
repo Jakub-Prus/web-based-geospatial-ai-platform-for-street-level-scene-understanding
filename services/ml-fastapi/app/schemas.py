@@ -48,3 +48,11 @@ class FrameRecord(BaseModel):
 class FrameListResponse(BaseModel):
     dataset: DatasetRecord
     frames: list[FrameRecord] = Field(default_factory=list)
+
+
+class FrameDetailRecord(FrameRecord):
+    preview_url: str
+
+
+class FrameDetailResponse(BaseModel):
+    frame: FrameDetailRecord

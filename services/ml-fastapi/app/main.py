@@ -5,6 +5,8 @@ from http import HTTPStatus
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app.a2d2_parser import A2D2SubsetParser, DatasetValidationError
 from app.config import (
@@ -19,6 +21,8 @@ from app.schemas import (
     DatasetLoadRequest,
     DatasetLoadResponse,
     DatasetRecord,
+    FrameDetailRecord,
+    FrameDetailResponse,
     FrameListResponse,
 )
 
@@ -27,6 +31,10 @@ SERVICE_DESCRIPTION = "Machine-learning facing API scaffold for the geospatial s
 SERVICE_STATUS = "ok"
 SERVICE_VERSION = "0.1.0"
 DEFAULT_DATASET_NAME = "a2d2-subset"
+DEFAULT_ALLOWED_ORIGINS = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
 
 
 def build_service_payload() -> dict[str, str]:
@@ -46,6 +54,13 @@ def create_app() -> FastAPI:
         title="Geospatial Scene ML API",
         version=SERVICE_VERSION,
         description=SERVICE_DESCRIPTION,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(DEFAULT_ALLOWED_ORIGINS),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
     )
     app.state.database_path = database_path
 
@@ -135,6 +150,68 @@ def create_app() -> FastAPI:
             dataset=DatasetRecord.model_validate(dataset_record),
             frames=frame_records,
         )
+
+    @app.get(
+        "/datasets/{dataset_id}/frames/{frame_id}",
+        response_model=FrameDetailResponse,
+        status_code=HTTPStatus.OK,
+    )
+    async def get_frame_detail(dataset_id: int, frame_id: str) -> FrameDetailResponse:
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                frame_record = repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+        return FrameDetailResponse(
+            frame=FrameDetailRecord(
+                **{key: value for key, value in frame_record.items() if key != "dataset_source_path"},
+                preview_url=str(
+                    app.url_path_for(
+                        "get_frame_preview",
+                        dataset_id=str(dataset_id),
+                        frame_id=frame_id,
+                    )
+                ),
+            )
+        )
+
+    @app.get(
+        "/datasets/{dataset_id}/frames/{frame_id}/preview",
+        name="get_frame_preview",
+        status_code=HTTPStatus.OK,
+    )
+    async def get_frame_preview(dataset_id: int, frame_id: str) -> FileResponse:
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                frame_record = repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+        dataset_source_path = Path(str(frame_record["dataset_source_path"])).resolve()
+        preview_path = dataset_source_path.joinpath(str(frame_record["image_path"])).resolve()
+
+        if dataset_source_path not in preview_path.parents:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail=f"Frame {frame_id} preview path is invalid for dataset {dataset_id}.",
+            )
+
+        if not preview_path.is_file():
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=f"Frame {frame_id} preview image was not found in dataset {dataset_id}.",
+            )
+
+        return FileResponse(preview_path)
 
     return app
 
