@@ -65,3 +65,14 @@ Additional browsing endpoints:
 - `GET /datasets/{dataset_id}/frames/{frame_id}/preview`
 
 The preview panel is driven from the selected map marker and displays the stored image plus key metadata for the chosen frame.
+
+## Slice 5 .NET Bridge
+
+The `.NET` bridge now exposes a minimal interoperability surface backed by a live read from FastAPI dataset metadata.
+
+Bridge endpoints:
+
+- `GET /bridge/health`
+- `GET /bridge/datasets/summary`
+
+The dataset summary endpoint proxies FastAPI `GET /datasets`, returning dataset counts, total frame counts, and per-dataset summary metadata without introducing write behavior or duplicate data ownership in `.NET`.
