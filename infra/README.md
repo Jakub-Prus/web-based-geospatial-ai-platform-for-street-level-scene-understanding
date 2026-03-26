@@ -1,10 +1,9 @@
-# Infrastructure Placeholder
+# Infrastructure Assets
 
-This folder is reserved for Slice 2 and later infrastructure assets:
+Slice 2 introduces the local runtime assets for the empty stack:
 
-- Docker Compose
-- service Dockerfiles
-- deployment manifests
-- environment templates
+- root `docker-compose.yml` for one-command startup
+- service-level Dockerfiles under `frontend/`, `services/ml-fastapi/`, and `services/bridge-dotnet/`
+- root `.env.example` documenting compose overrides
 
-Slice 1 only establishes the folder so the repository structure matches the implementation plan.
+Later slices can expand this folder with deployment manifests and environment-specific infrastructure files without changing the basic local stack contract.

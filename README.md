@@ -1,6 +1,6 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 1 repository skeleton for the planned geospatial AI demo platform.
+Slice 2 local runtime for the planned geospatial AI demo platform.
 
 ## Specification Docs
 
@@ -17,31 +17,30 @@ External sources and downloaded model assets are frozen before implementation in
 - `services/bridge-dotnet/`: .NET 8 Web API scaffold for bridge endpoints
 - `infra/`: infrastructure placeholders for Docker and deployment assets
 
-## Local Boot Commands
+## Local Runtime
 
-Frontend:
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-FastAPI:
+Start the full empty stack with one command:
 
 ```powershell
-cd services/ml-fastapi
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
+docker compose up --build
 ```
 
-.NET bridge:
+Core endpoints after startup:
+
+- frontend: `http://localhost:3000`
+- frontend health: `http://localhost:3000/health`
+- FastAPI root: `http://localhost:8000/`
+- FastAPI health: `http://localhost:8000/health`
+- .NET bridge root: `http://localhost:8080/`
+- .NET bridge health: `http://localhost:8080/health`
+- MinIO API: `http://localhost:9000`
+- MinIO console: `http://localhost:9001`
+- PostGIS: `localhost:5432`
+
+Compose runs with built-in defaults, and [`.env.example`](.env.example) documents every supported override for ports, credentials, and service URLs.
+
+Stop the stack with:
 
 ```powershell
-cd services/bridge-dotnet
-dotnet run
+docker compose down
 ```
-
-The current development environment used for this slice does not have the .NET SDK installed, so the bridge scaffold is present but was not executed locally here.

@@ -1,0 +1,116 @@
+name: geospatial-scene-stack
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_FASTAPI_BASE_URL: ${VITE_FASTAPI_BASE_URL:-http://localhost:8000}
+        VITE_BRIDGE_BASE_URL: ${VITE_BRIDGE_BASE_URL:-http://localhost:8080}
+        VITE_OBJECT_STORAGE_CONSOLE_URL: ${VITE_OBJECT_STORAGE_CONSOLE_URL:-http://localhost:9001}
+    depends_on:
+      bridge-dotnet:
+        condition: service_started
+      ml-fastapi:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
+  ml-fastapi:
+    build:
+      context: ./services/ml-fastapi
+    depends_on:
+      object-storage:
+        condition: service_started
+      postgis:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-docker}
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://object-storage:9000}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
+      POSTGRES_DB: ${POSTGRES_DB:-geospatial_scene}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "${FASTAPI_PORT:-8000}:8000"
+
+  bridge-dotnet:
+    build:
+      context: ./services/bridge-dotnet
+    depends_on:
+      ml-fastapi:
+        condition: service_healthy
+      object-storage:
+        condition: service_started
+      postgis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__PlatformDatabase: Host=postgis;Port=5432;Database=${POSTGRES_DB:-geospatial_scene};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      MLApi__BaseUrl: ${ML_API_BASE_URL_INTERNAL:-http://ml-fastapi:8000}
+      ObjectStorage__AccessKey: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
+      ObjectStorage__Endpoint: ${OBJECT_STORAGE_ENDPOINT:-http://object-storage:9000}
+      ObjectStorage__SecretKey: ${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "${BRIDGE_PORT:-8080}:8080"
+
+  postgis:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-geospatial_scene}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+
+  object-storage:
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
+    image: minio/minio:latest
+    ports:
+      - "${OBJECT_STORAGE_API_PORT:-9000}:9000"
+      - "${OBJECT_STORAGE_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - object-storage-data:/data
+
+volumes:
+  object-storage-data:
+  postgis-data:
