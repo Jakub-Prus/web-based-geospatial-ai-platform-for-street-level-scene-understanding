@@ -44,3 +44,13 @@ Stop the stack with:
 ```powershell
 docker compose down
 ```
+
+## Slice 3 Dataset API
+
+FastAPI now supports the Slice 3 dataset-loading flow:
+
+- `POST /datasets/load`
+- `GET /datasets`
+- `GET /datasets/{dataset_id}/frames`
+
+By default, the loader targets `data/raw/a2d2-subset/` and supplements missing GPS and orientation metadata from `data/raw/a2d2-preview.tar` when needed for the extracted A2D2 subset.

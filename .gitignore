@@ -7,5 +7,6 @@ services/ml-fastapi/.venv/
 services/ml-fastapi/.pytest_cache/
 services/ml-fastapi/**/__pycache__/
 services/ml-fastapi/**/*.pyc
+services/ml-fastapi/data/
 services/bridge-dotnet/bin/
 services/bridge-dotnet/obj/
