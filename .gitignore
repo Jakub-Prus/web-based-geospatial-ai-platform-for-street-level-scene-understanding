@@ -1,3 +1,11 @@
 data/raw/*
 !data/raw/.gitkeep
 !data/README.md
+frontend/node_modules/
+frontend/dist/
+services/ml-fastapi/.venv/
+services/ml-fastapi/.pytest_cache/
+services/ml-fastapi/**/__pycache__/
+services/ml-fastapi/**/*.pyc
+services/bridge-dotnet/bin/
+services/bridge-dotnet/obj/
