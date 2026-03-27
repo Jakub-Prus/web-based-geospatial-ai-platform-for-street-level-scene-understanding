@@ -18,6 +18,7 @@ readonly DOCKER_COMPOSE_FILE="${REPO_ROOT}/docker-compose.yml"
 readonly DEFAULT_FRONTEND_PORT="3000"
 readonly DEFAULT_FASTAPI_PORT="8000"
 readonly DEFAULT_BRIDGE_PORT="8080"
+readonly DEFAULT_START_LOCAL_RUN_DETECTION="1"
 readonly DEFAULT_A2D2_SEQUENCE="20190401_121727"
 readonly DEFAULT_A2D2_CAMERA="cam_front_right"
 readonly DEFAULT_A2D2_FRAME_COUNT="20"
@@ -27,8 +28,17 @@ readonly YOLO_MODEL_URL="https://github.com/ultralytics/assets/releases/download
 readonly MIDAS_MODEL_URL="https://github.com/isl-org/MiDaS/releases/download/v3_1/dpt_swin2_tiny_256.pt"
 readonly A2D2_PREVIEW_ARCHIVE_URL="https://aev-autonomous-driving-dataset.s3.eu-central-1.amazonaws.com/a2d2-preview.tar"
 readonly CURL_ERROR_STATUS="000"
+readonly HTTP_STATUS_OK="200"
+readonly HTTP_STATUS_CREATED="201"
+readonly HTTP_STATUS_NOT_FOUND="404"
+readonly DETECTION_RUN_STATUS_COMPLETED="completed"
+readonly DETECTION_RUN_STATUS_FAILED="failed"
+readonly DETECTION_RUN_STATUS_EMPTY="empty"
+readonly DETECTION_RUN_STATUS_RUNNING="running"
 
 TEMP_FILES=()
+LOADED_DATASET_ID=""
+LOADED_FRAME_COUNT="0"
 
 log() {
   printf '[start_local] %s\n' "$1"
@@ -54,6 +64,42 @@ cleanup_temp_files() {
 
 trap cleanup_temp_files EXIT
 
+extract_json_number_field() {
+  local json_payload="$1"
+  local field_name="$2"
+
+  printf '%s' "${json_payload}" \
+    | grep -oE "\"${field_name}\"[[:space:]]*:[[:space:]]*[0-9]+" \
+    | head -n 1 \
+    | grep -oE "[0-9]+" || true
+}
+
+extract_json_string_field() {
+  local json_payload="$1"
+  local field_name="$2"
+
+  printf '%s' "${json_payload}" \
+    | grep -oE "\"${field_name}\"[[:space:]]*:[[:space:]]*\"[^\"]+\"" \
+    | head -n 1 \
+    | sed -E "s/\"${field_name}\"[[:space:]]*:[[:space:]]*\"([^\"]+)\"/\\1/" || true
+}
+
+env_var_is_truthy() {
+  local value="${1:-}"
+
+  case "${value,,}" in
+    1|true|yes|on)
+      return 0
+      ;;
+    0|false|no|off|"")
+      return 1
+      ;;
+    *)
+      fail "Unsupported boolean value '${value}' for START_LOCAL_RUN_DETECTION."
+      ;;
+  esac
+}
+
 print_help() {
   cat <<'EOF'
 Usage: bash ./scripts/start_local.sh
@@ -71,6 +117,7 @@ Environment overrides:
   FRONTEND_PORT
   FASTAPI_PORT
   BRIDGE_PORT
+  START_LOCAL_RUN_DETECTION
   A2D2_SEQUENCE
   A2D2_CAMERA
   A2D2_FRAME_COUNT
@@ -239,6 +286,7 @@ load_dataset() {
   local dataset_load_url="${fastapi_base_url}${DATASET_LOAD_ENDPOINT_PATH}"
   local response_file
   local http_status
+  local response_body
 
   log "Loading dataset through ${dataset_load_url}"
   response_file="$(mktemp)"
@@ -252,10 +300,166 @@ load_dataset() {
       --data '{}' \
       "${dataset_load_url}" || printf '%s' "${CURL_ERROR_STATUS}"
   )"
-  if [[ "${http_status}" != "200" && "${http_status}" != "201" ]]; then
+  if [[ "${http_status}" != "${HTTP_STATUS_OK}" && "${http_status}" != "${HTTP_STATUS_CREATED}" ]]; then
     fail "Dataset load failed with status ${http_status}: $(cat "${response_file}")"
   fi
+  response_body="$(tr -d '\r\n' < "${response_file}")"
+  LOADED_DATASET_ID="$(extract_json_number_field "${response_body}" "id")"
+  LOADED_FRAME_COUNT="$(extract_json_number_field "${response_body}" "loaded_frame_count")"
+
+  if [[ -z "${LOADED_DATASET_ID}" || -z "${LOADED_FRAME_COUNT}" ]]; then
+    fail "Dataset load succeeded but the response could not be parsed: ${response_body}"
+  fi
+
   log "Dataset load request completed."
+  log "Loaded dataset ${LOADED_DATASET_ID} with ${LOADED_FRAME_COUNT} frames."
+}
+
+fetch_first_frame_id() {
+  local fastapi_base_url="$1"
+  local dataset_id="$2"
+  local frames_url="${fastapi_base_url}/datasets/${dataset_id}/frames"
+  local response_file
+  local http_status
+  local response_body
+
+  response_file="$(mktemp)"
+  register_temp_file "${response_file}"
+  http_status="$(
+    curl --silent --show-error \
+      --output "${response_file}" \
+      --write-out "%{http_code}" \
+      "${frames_url}" || printf '%s' "${CURL_ERROR_STATUS}"
+  )"
+
+  if [[ "${http_status}" != "${HTTP_STATUS_OK}" ]]; then
+    fail "Frame lookup failed with status ${http_status}: $(cat "${response_file}")"
+  fi
+
+  response_body="$(tr -d '\r\n' < "${response_file}")"
+  extract_json_string_field "${response_body}" "frame_id"
+}
+
+fetch_existing_detection_run_status() {
+  local fastapi_base_url="$1"
+  local dataset_id="$2"
+  local frame_id="$3"
+  local detections_url="${fastapi_base_url}/datasets/${dataset_id}/frames/${frame_id}/detections"
+  local response_file
+  local http_status
+  local response_body
+  local run_status
+
+  response_file="$(mktemp)"
+  register_temp_file "${response_file}"
+  http_status="$(
+    curl --silent --show-error \
+      --output "${response_file}" \
+      --write-out "%{http_code}" \
+      "${detections_url}" || printf '%s' "${CURL_ERROR_STATUS}"
+  )"
+
+  case "${http_status}" in
+    "${HTTP_STATUS_OK}")
+      response_body="$(tr -d '\r\n' < "${response_file}")"
+      run_status="$(extract_json_string_field "${response_body}" "status")"
+      if [[ -z "${run_status}" ]]; then
+        fail "Unable to parse the existing detection-run status: ${response_body}"
+      fi
+      printf '%s' "${run_status}"
+      return 0
+      ;;
+    "${HTTP_STATUS_NOT_FOUND}")
+      return 0
+      ;;
+    *)
+      fail "Detection-run check failed with status ${http_status}: $(cat "${response_file}")"
+      ;;
+  esac
+}
+
+trigger_detection_run_if_needed() {
+  local fastapi_base_url="$1"
+  local detection_run_enabled="${START_LOCAL_RUN_DETECTION:-${DEFAULT_START_LOCAL_RUN_DETECTION}}"
+  local frame_id
+  local run_url
+  local response_file
+  local http_status
+  local response_body
+  local run_status
+  local detection_count
+  local existing_run_status
+
+  if ! env_var_is_truthy "${detection_run_enabled}"; then
+    log "Skipping automatic detection run because START_LOCAL_RUN_DETECTION=${detection_run_enabled}."
+    return
+  fi
+
+  if [[ "${LOADED_FRAME_COUNT}" == "0" ]]; then
+    log "Skipping automatic detection run because the loaded dataset has no frames."
+    return
+  fi
+
+  frame_id="$(fetch_first_frame_id "${fastapi_base_url}" "${LOADED_DATASET_ID}")"
+  if [[ -z "${frame_id}" ]]; then
+    fail "Unable to determine a frame id for dataset ${LOADED_DATASET_ID}."
+  fi
+
+  existing_run_status="$(
+    fetch_existing_detection_run_status "${fastapi_base_url}" "${LOADED_DATASET_ID}" "${frame_id}"
+  )"
+  case "${existing_run_status}" in
+    "")
+      ;;
+    "${DETECTION_RUN_STATUS_COMPLETED}"|"${DETECTION_RUN_STATUS_RUNNING}")
+      log "Skipping automatic detection run because dataset ${LOADED_DATASET_ID} already has a detection run with status ${existing_run_status}."
+      return
+      ;;
+    "${DETECTION_RUN_STATUS_EMPTY}"|"${DETECTION_RUN_STATUS_FAILED}")
+      log "Existing detection run status is ${existing_run_status}; triggering a fresh run."
+      ;;
+    *)
+      fail "Unsupported detection-run status '${existing_run_status}' returned for dataset ${LOADED_DATASET_ID}."
+      ;;
+  esac
+
+  run_url="${fastapi_base_url}/datasets/${LOADED_DATASET_ID}/runs/detect"
+  response_file="$(mktemp)"
+  register_temp_file "${response_file}"
+
+  log "Triggering Slice 6 detection run for dataset ${LOADED_DATASET_ID}."
+  http_status="$(
+    curl --silent --show-error \
+      --output "${response_file}" \
+      --write-out "%{http_code}" \
+      --request POST \
+      --header "Content-Type: application/json" \
+      --data '{}' \
+      "${run_url}" || printf '%s' "${CURL_ERROR_STATUS}"
+  )"
+
+  if [[ "${http_status}" != "${HTTP_STATUS_CREATED}" ]]; then
+    fail "Detection run failed with status ${http_status}: $(cat "${response_file}")"
+  fi
+
+  response_body="$(tr -d '\r\n' < "${response_file}")"
+  run_status="$(extract_json_string_field "${response_body}" "status")"
+  detection_count="$(extract_json_number_field "${response_body}" "detection_count")"
+
+  if [[ -z "${run_status}" ]]; then
+    fail "Detection run succeeded but the response could not be parsed: ${response_body}"
+  fi
+
+  if [[ "${run_status}" == "${DETECTION_RUN_STATUS_FAILED}" ]]; then
+    fail "Detection run completed with status '${run_status}': ${response_body}"
+  fi
+
+  if [[ "${run_status}" == "${DETECTION_RUN_STATUS_EMPTY}" ]]; then
+    log "Detection run completed with no stored detections. Frames may still show empty-state messaging."
+    return
+  fi
+
+  log "Detection run completed with status ${run_status} and ${detection_count:-0} stored detections."
 }
 
 main() {
@@ -294,6 +498,7 @@ main() {
   wait_for_endpoint ".NET bridge" "${bridge_base_url}${HEALTH_ENDPOINT_PATH}"
   wait_for_endpoint "frontend" "${frontend_base_url}${HEALTH_ENDPOINT_PATH}"
   load_dataset "${fastapi_base_url}"
+  trigger_detection_run_if_needed "${fastapi_base_url}"
 
   cat <<EOF
 

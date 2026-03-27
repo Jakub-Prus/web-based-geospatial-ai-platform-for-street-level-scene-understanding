@@ -48,7 +48,7 @@ If you want to run the apps outside containers for development, also install:
 
 ### 1. One-command bootstrap
 
-To create `.env`, download the pinned assets, extract the default A2D2 subset when needed, start Docker Compose, wait for the services, and load the dataset automatically, run:
+To create `.env`, download the pinned assets, extract the default A2D2 subset when needed, start Docker Compose, wait for the services, load the dataset automatically, and trigger Slice 6 detection when needed, run:
 
 ```bash
 bash ./scripts/start_local.sh
@@ -61,6 +61,9 @@ The script is idempotent for the normal local workflow:
 - it skips extraction when `data/raw/a2d2-subset/` already contains files
 - it starts the stack in detached mode
 - it finishes by calling `POST /datasets/load`
+- it triggers `POST /datasets/{dataset_id}/runs/detect` when the loaded dataset has no detection run yet or the latest persisted run ended `empty` or `failed`
+
+Set `START_LOCAL_RUN_DETECTION=0` before running the script if you want to skip the automatic detection step and start faster while debugging unrelated parts of the stack.
 
 On a fresh machine, the first run can take a while because it may download the pinned model files and the `a2d2-preview.tar` archive before extracting the subset.
 
