@@ -212,6 +212,8 @@ The dataset summary endpoint proxies FastAPI `GET /datasets`, returning dataset 
 
 FastAPI now supports persisted detection runs backed by `data/raw/models/yolo11n.pt`.
 
+The Docker image for `services/ml-fastapi` now includes the native runtime libraries Ultralytics needs for local inference, including `libxcb1`, so Slice 6 detection can execute inside the Compose stack.
+
 Detection endpoints:
 
 - `POST /datasets/{dataset_id}/runs/detect`
