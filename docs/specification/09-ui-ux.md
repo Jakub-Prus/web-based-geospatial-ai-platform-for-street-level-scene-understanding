@@ -1,23 +1,23 @@
 # 09. UI And UX
 
-Status: Proposed v1
+Status: Updated after Slice 7
 
-## Core Screens
+## Current Screens
 
-- Dataset upload and processing screen
-- Map plus street-image review workspace
-- 3D point-cloud viewer
-- Monitoring dashboard
-- Export panel
+- dataset selection and spatial browsing workspace
+- read-only street-image review workspace with detection overlays
+- planned 3D point-cloud viewer
+- planned monitoring dashboard
+- planned export panel
 
-## Primary UX Concept
+## Current Review Workspace
 
-The most important screen is a split review workspace:
+The implemented workspace is currently a two-panel review layout:
 
-- Left panel: map with camera positions and dataset navigation
-- Center panel: street-level image viewer
-- Overlay layer: detections, labels, and annotation tools
-- Right panel: selected object details, correction controls, and audit history
+- left panel: map with stored camera positions and frame selection
+- right panel: street-level image viewer with persisted bounding boxes and run metadata
+
+The future correction sidebar is still deferred until the annotation slices.
 
 ## Primary User Flow
 
@@ -25,16 +25,29 @@ The most important screen is a split review workspace:
 2. User starts AI processing.
 3. User waits for job completion and opens the review workspace.
 4. User selects a camera point on the map.
-5. User inspects detections and edits incorrect predictions.
-6. User opens the 3D view for the same frame.
-7. User saves corrections and views updated metrics.
+5. User inspects read-only detections, labels, confidence values, and run status.
+6. Future slice: user edits incorrect predictions.
+7. Future slice: user opens the 3D view for the same frame.
+8. Future slice: user saves corrections and views updated metrics.
 
 ## Visualization Requirements
 
 - The map must support camera markers and spatial navigation.
-- The image viewer must support zoom, pan, and box overlays.
-- The annotation UI must allow drawing, resizing, relabeling, and deleting boxes.
+- The image viewer must render stored detections from image pixel coordinates.
+- The current UI must expose run state clearly for completed, empty, failed, and missing-run cases.
+- Future slice: the image viewer should support zoom and pan.
+- Future slice: the annotation UI should allow drawing, resizing, relabeling, and deleting boxes.
 - The 3D view must render depth-derived point data in Three.js.
+
+## Current Empty States
+
+The Slice 7 viewer should remain understandable in each of these states:
+
+- no frame selected
+- no detection run stored yet
+- detection run is still running
+- latest detection run failed
+- latest run exists but the selected frame has no stored detections
 
 ## UX Quality Bar
 

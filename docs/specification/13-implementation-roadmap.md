@@ -1,6 +1,23 @@
 # 13. Implementation Roadmap
 
-Status: Proposed v1
+Status: Updated after Slice 7
+
+## Current Progress
+
+Completed slices:
+
+- Slice 0: contracts frozen
+- Slice 1: repo skeleton
+- Slice 2: local runtime
+- Slice 3: dataset loading
+- Slice 4: map marker browsing
+- Slice 5: .NET bridge minimum
+- Slice 6: detection backend
+- Slice 7: detection overlay UI
+
+Next planned slice:
+
+- Slice 8: correction persistence backend
 
 ## Planning Assumptions
 
@@ -103,6 +120,9 @@ The MVP is complete when the platform can:
 - Run status is visible in the UI
 - Failed or empty runs produce usable UI feedback
 - The .NET bridge can return at least one dataset or run summary
+
+Status note:
+Day 2 scope is now effectively complete in the current repository state.
 
 ## Day 3: Human-In-The-Loop Annotation
 

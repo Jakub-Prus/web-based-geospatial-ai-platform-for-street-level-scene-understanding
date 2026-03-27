@@ -11,6 +11,18 @@ The plan is intentionally aligned to the Cyclomedia Full Stack Developer: Geospa
 3. Advanced React-based visualization
 4. Human-in-the-loop review and correction
 
+## Current Build State
+
+Implementation is currently complete through Slice 7:
+
+- dataset loading and validation
+- spatial browsing with stored camera markers
+- .NET dataset summary bridge
+- persisted detection runs
+- read-only detection overlay rendering in the frontend viewer
+
+Annotation editing, depth, point-cloud generation, metrics, and export remain planned slices.
+
 ## Recommended Reading Order
 
 1. `01-overview.md`

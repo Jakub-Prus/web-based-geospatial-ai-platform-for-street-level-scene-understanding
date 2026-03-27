@@ -6,4 +6,12 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
   },
+  test: {
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+    },
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+  },
 });

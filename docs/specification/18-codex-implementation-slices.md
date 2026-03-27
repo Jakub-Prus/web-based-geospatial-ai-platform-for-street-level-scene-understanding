@@ -1,6 +1,6 @@
 # 18. Codex Implementation Slices
 
-Status: Proposed v2
+Status: Active implementation plan, updated after Slice 7
 
 ## Purpose
 
@@ -297,6 +297,8 @@ Introduce model inference and persist detections.
 
 ## Slice 7: Detection Overlay UI
 
+Status: Implemented
+
 ### Goal
 
 Render stored detections on the selected frame.
@@ -326,6 +328,13 @@ Render stored detections on the selected frame.
 ### Stop Condition
 
 - One frame can be visually inspected with correct overlays.
+
+Current result:
+
+- The frontend renders stored bounding boxes over the selected frame image.
+- Labels and confidence values are visible inside each box.
+- The viewer displays latest run state plus useful missing, empty, and failed-run feedback.
+- Editing controls remain deferred.
 
 ## Slice 8: Correction Persistence Backend
 

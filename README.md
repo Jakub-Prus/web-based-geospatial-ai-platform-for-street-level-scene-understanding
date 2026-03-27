@@ -1,6 +1,16 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 4 spatial browsing workspace for the planned geospatial AI demo platform.
+Slice 7 detection overlay workspace for the planned geospatial AI demo platform.
+
+Slices `0` through `7` are now implemented:
+
+- dataset contract and geometry contract are frozen
+- React, FastAPI, and .NET service skeletons are in place
+- Docker Compose starts the local stack
+- A2D2 subset metadata can be loaded and browsed on the map
+- the .NET bridge exposes dataset summary endpoints
+- detection runs are persisted in FastAPI
+- stored detections render in the frontend image viewer with run-state feedback
 
 ## Specification Docs
 
@@ -17,9 +27,33 @@ External sources and downloaded model assets are frozen before implementation in
 - `services/bridge-dotnet/`: .NET 8 Web API scaffold for bridge endpoints
 - `infra/`: infrastructure placeholders for Docker and deployment assets
 
-## Local Runtime
+## Run Locally
 
-Start the full empty stack with one command:
+### Prerequisites
+
+For the standard local setup, install:
+
+- Docker Desktop with `docker compose`
+
+If you want to run the apps outside containers for development, also install:
+
+- Node.js 20
+- Python 3.12
+- .NET 8 SDK
+
+### 1. Create local environment overrides
+
+Copy the example environment file before starting the stack:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The defaults in [`.env.example`](.env.example) are enough for a first run. Edit `.env` only if you need different ports, credentials, or service URLs.
+
+### 2. Start the full stack with Docker
+
+From the repository root, run:
 
 ```powershell
 docker compose up --build
@@ -37,12 +71,79 @@ Core endpoints after startup:
 - MinIO console: `http://localhost:9001`
 - PostGIS: `localhost:5432`
 
-Compose runs with built-in defaults, and [`.env.example`](.env.example) documents every supported override for ports, credentials, and service URLs.
-
 Stop the stack with:
 
 ```powershell
 docker compose down
+```
+
+### 3. Prepare local data assets
+
+The runtime starts without seeded data, but the dataset and detection flows expect assets under `data/raw/`.
+
+Download the pinned model files:
+
+```powershell
+.\scripts\download_external_assets.ps1
+```
+
+If you also want the A2D2 preview archive needed for local dataset extraction, include the optional flag:
+
+```powershell
+.\scripts\download_external_assets.ps1 -DownloadA2D2Preview
+```
+
+Extract a small local subset from the preview archive:
+
+```powershell
+.\scripts\extract_a2d2_subset.ps1
+```
+
+After the stack is running and the subset exists, load it through FastAPI:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/datasets/load -ContentType "application/json" -Body "{}"
+```
+
+### 4. Run services outside Docker
+
+If you prefer live-reload development, start the infrastructure services first:
+
+```powershell
+docker compose up postgis object-storage
+```
+
+Then run each app in a separate terminal.
+
+Frontend:
+
+```powershell
+Set-Location frontend
+$env:VITE_FASTAPI_BASE_URL="http://localhost:8000"
+$env:VITE_BRIDGE_BASE_URL="http://localhost:8080"
+$env:VITE_OBJECT_STORAGE_CONSOLE_URL="http://localhost:9001"
+npm ci
+npm run dev -- --port 3000
+```
+
+FastAPI:
+
+```powershell
+Set-Location services/ml-fastapi
+python -m venv .venv
+. .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+.NET bridge:
+
+```powershell
+Set-Location services/bridge-dotnet
+$env:ASPNETCORE_URLS="http://localhost:8080"
+$env:MLApi__BaseUrl="http://localhost:8000"
+dotnet restore
+dotnet run
 ```
 
 ## Slice 3 Dataset API
@@ -89,3 +190,40 @@ Detection endpoints:
 - `GET /datasets/{dataset_id}/frames/{frame_id}/detections`
 
 Each run persists explicit `running`, `completed`, `empty`, or `failed` state plus stored bounding boxes in image pixel coordinates for later overlay and correction slices.
+
+## Slice 7 Detection Overlay UI
+
+The selected-frame panel is now a read-only image viewer that renders stored detections directly over the frame image.
+
+The viewer now includes:
+
+- bounding-box overlays scaled from persisted image pixel coordinates
+- class-label and confidence chips inside each rendered box
+- a run-status summary with model name, processed frames, detection counts, and timestamps
+- useful empty states for no selected frame, no run yet, failed run, running run, and no detections for the chosen frame
+
+Editing tools are intentionally deferred to Slice 9.
+
+## Local Verification
+
+Frontend checks:
+
+```powershell
+cd frontend
+npm install
+npm test
+npm run build
+```
+
+Frontend coverage currently runs through Vitest with V8 coverage and exercises the frame-selection and overlay-rendering flow.
+
+FastAPI checks:
+
+```powershell
+cd services/ml-fastapi
+.\.venv\Scripts\python.exe -m pytest --cov=app --cov-report=term-missing
+```
+
+The current FastAPI suite passes at `87%` total coverage.
+
+.NET bridge tests require a local `.NET` SDK, not just the runtime. In the current environment `dotnet.exe` is present, but `dotnet --list-sdks` returns no installed SDKs.

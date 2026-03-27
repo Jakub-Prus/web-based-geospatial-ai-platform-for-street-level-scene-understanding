@@ -1,153 +1,22 @@
 import { useEffect, useState } from "react";
 
-const DEFAULT_FASTAPI_URL = `${window.location.protocol}//${window.location.hostname}:8000`;
-const MAP_PADDING_RATIO = 0.12;
-const MIN_COORDINATE_SPAN = 0.0001;
-const HEADING_PRECISION = 1;
-const COORDINATE_PRECISION = 6;
-const STACK_COLUMNS = 4;
-const STACK_HORIZONTAL_SPACING_PERCENT = 2.6;
-const STACK_VERTICAL_SPACING_PERCENT = 2.4;
-const MAP_EDGE_PADDING_PERCENT = 2;
-
-type DatasetRecord = {
-  id: number;
-  name: string;
-  source_path: string;
-  sequence_id: string;
-  camera_name: string;
-  frame_count: number;
-  created_at: string;
-};
-
-type FrameRecord = {
-  frame_id: string;
-  dataset_id: number;
-  image_path: string;
-  latitude: number;
-  longitude: number;
-  heading_degrees: number;
-  timestamp: string;
-  image_width: number;
-  image_height: number;
-  pitch_degrees: number | null;
-  roll_degrees: number | null;
-  camera_intrinsics_json: string | null;
-  sequence_id: string | null;
-  depth_path: string | null;
-};
-
-type FrameDetailRecord = FrameRecord & {
-  preview_url: string;
-};
-
-type DatasetListResponse = {
-  datasets: DatasetRecord[];
-};
-
-type FrameListResponse = {
-  dataset: DatasetRecord;
-  frames: FrameRecord[];
-};
-
-type FrameDetailResponse = {
-  frame: FrameDetailRecord;
-};
-
-type MarkerPosition = {
-  frame: FrameRecord;
-  left: number;
-  top: number;
-};
-
-const apiBaseUrl = import.meta.env.VITE_FASTAPI_BASE_URL ?? DEFAULT_FASTAPI_URL;
-
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`);
-
-  if (!response.ok) {
-    throw new Error(`Request failed for ${path}: ${response.status}`);
-  }
-
-  return (await response.json()) as T;
-}
-
-function buildPreviewUrl(previewPath: string): string {
-  return new URL(previewPath, apiBaseUrl).toString();
-}
-
-function formatTimestamp(timestamp: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "medium",
-  }).format(new Date(timestamp));
-}
-
-function formatCoordinate(value: number): string {
-  return value.toFixed(COORDINATE_PRECISION);
-}
-
-function buildMarkerPositions(frames: FrameRecord[]): MarkerPosition[] {
-  if (frames.length === 0) {
-    return [];
-  }
-
-  const latitudes = frames.map((frame) => frame.latitude);
-  const longitudes = frames.map((frame) => frame.longitude);
-  const minimumLatitude = Math.min(...latitudes);
-  const maximumLatitude = Math.max(...latitudes);
-  const minimumLongitude = Math.min(...longitudes);
-  const maximumLongitude = Math.max(...longitudes);
-  const latitudeSpan = Math.max(maximumLatitude - minimumLatitude, MIN_COORDINATE_SPAN);
-  const longitudeSpan = Math.max(maximumLongitude - minimumLongitude, MIN_COORDINATE_SPAN);
-  const paddedLatitudeSpan = latitudeSpan * (1 + MAP_PADDING_RATIO * 2);
-  const paddedLongitudeSpan = longitudeSpan * (1 + MAP_PADDING_RATIO * 2);
-  const latitudeOrigin = minimumLatitude - latitudeSpan * MAP_PADDING_RATIO;
-  const longitudeOrigin = minimumLongitude - longitudeSpan * MAP_PADDING_RATIO;
-
-  const duplicateCounts = new Map<string, number>();
-  const duplicateGroupSizes = new Map<string, number>();
-
-  frames.forEach((frame) => {
-    const duplicateKey = `${frame.latitude}:${frame.longitude}`;
-    duplicateGroupSizes.set(duplicateKey, (duplicateGroupSizes.get(duplicateKey) ?? 0) + 1);
-  });
-
-  return frames.map((frame) => {
-    const longitudeOffset = frame.longitude - longitudeOrigin;
-    const latitudeOffset = frame.latitude - latitudeOrigin;
-    const anchorLeft = (longitudeOffset / paddedLongitudeSpan) * 100;
-    const anchorTop = 100 - (latitudeOffset / paddedLatitudeSpan) * 100;
-    const duplicateKey = `${frame.latitude}:${frame.longitude}`;
-    const duplicateIndex = duplicateCounts.get(duplicateKey) ?? 0;
-    const duplicateGroupSize = duplicateGroupSizes.get(duplicateKey) ?? 1;
-
-    duplicateCounts.set(duplicateKey, duplicateIndex + 1);
-
-    const columnCount = Math.min(duplicateGroupSize, STACK_COLUMNS);
-    const rowCount = Math.ceil(duplicateGroupSize / STACK_COLUMNS);
-    const columnIndex = duplicateIndex % STACK_COLUMNS;
-    const rowIndex = Math.floor(duplicateIndex / STACK_COLUMNS);
-    const offsetX =
-      (columnIndex - (columnCount - 1) / 2) * STACK_HORIZONTAL_SPACING_PERCENT;
-    const offsetY =
-      (rowIndex - (rowCount - 1) / 2) * STACK_VERTICAL_SPACING_PERCENT;
-    const left = Math.min(
-      100 - MAP_EDGE_PADDING_PERCENT,
-      Math.max(MAP_EDGE_PADDING_PERCENT, anchorLeft + offsetX),
-    );
-    const top = Math.min(
-      100 - MAP_EDGE_PADDING_PERCENT,
-      Math.max(MAP_EDGE_PADDING_PERCENT, anchorTop + offsetY),
-    );
-
-    return {
-      frame,
-      left,
-      top,
-    };
-  });
-}
+import { DetectionViewer } from "./DetectionViewer";
+import type {
+  DatasetListResponse,
+  DatasetRecord,
+  FrameDetectionsResponse,
+  FrameDetailRecord,
+  FrameDetailResponse,
+  FrameListResponse,
+  FrameRecord,
+  InferenceRunRecord,
+  DetectionRecord,
+} from "./types";
+import {
+  buildMarkerPositions,
+  fetchJson,
+  type ApiError,
+} from "./viewer";
 
 type DatasetListProps = {
   datasets: DatasetRecord[];
@@ -163,11 +32,11 @@ function DatasetList({
   return (
     <section className="dataset-panel">
       <div className="section-header">
-        <p className="eyebrow">Slice 4</p>
-        <h1>Spatial frame browser</h1>
+        <p className="eyebrow">Slice 7</p>
+        <h1>Detection overlay workspace</h1>
         <p className="panel-copy">
-          Choose a loaded dataset, inspect the stored camera locations, and open
-          a frame preview directly from the map.
+          Choose a loaded dataset, inspect stored camera locations, and open a
+          frame viewer with persisted detection overlays and run status.
         </p>
       </div>
 
@@ -259,81 +128,31 @@ function SpatialMap({
 }
 
 type FramePreviewProps = {
-  dataset: DatasetRecord | null;
+  datasetName: string | null;
   selectedFrame: FrameDetailRecord | null;
+  run: InferenceRunRecord | null;
+  detections: DetectionRecord[];
   loading: boolean;
   error: string | null;
 };
 
 function FramePreview({
-  dataset,
+  datasetName,
   selectedFrame,
+  run,
+  detections,
   loading,
   error,
 }: FramePreviewProps): JSX.Element {
   return (
-    <section className="workspace-panel preview-panel">
-      <div className="section-header section-header--row">
-        <div>
-          <h2>Frame preview</h2>
-          <p className="panel-copy">
-            Click any camera marker to inspect the corresponding stored frame.
-          </p>
-        </div>
-        {dataset ? <span className="stat-pill">{dataset.name}</span> : null}
-      </div>
-
-      {loading ? <p className="status-message">Loading selected frame...</p> : null}
-      {error ? <p className="status-message status-message--error">{error}</p> : null}
-
-      {!loading && !error && !selectedFrame ? (
-        <p className="status-message">
-          No frame selected yet. Choose a marker from the map to open its
-          preview.
-        </p>
-      ) : null}
-
-      {selectedFrame ? (
-        <div className="preview-card">
-          <img
-            className="preview-image"
-            src={buildPreviewUrl(selectedFrame.preview_url)}
-            alt={`Preview for ${selectedFrame.frame_id}`}
-          />
-          <dl className="frame-metadata">
-            <div>
-              <dt>Frame</dt>
-              <dd>{selectedFrame.frame_id}</dd>
-            </div>
-            <div>
-              <dt>Captured</dt>
-              <dd>{formatTimestamp(selectedFrame.timestamp)}</dd>
-            </div>
-            <div>
-              <dt>Heading</dt>
-              <dd>{selectedFrame.heading_degrees.toFixed(HEADING_PRECISION)} degrees</dd>
-            </div>
-            <div>
-              <dt>Coordinates</dt>
-              <dd>
-                {formatCoordinate(selectedFrame.latitude)},{" "}
-                {formatCoordinate(selectedFrame.longitude)}
-              </dd>
-            </div>
-            <div>
-              <dt>Dimensions</dt>
-              <dd>
-                {selectedFrame.image_width} x {selectedFrame.image_height}
-              </dd>
-            </div>
-            <div>
-              <dt>Image path</dt>
-              <dd>{selectedFrame.image_path}</dd>
-            </div>
-          </dl>
-        </div>
-      ) : null}
-    </section>
+    <DetectionViewer
+      datasetName={datasetName}
+      frame={selectedFrame}
+      run={run}
+      detections={detections}
+      loading={loading}
+      error={error}
+    />
   );
 }
 
@@ -349,6 +168,10 @@ export default function App(): JSX.Element {
   const [selectedFrame, setSelectedFrame] = useState<FrameDetailRecord | null>(null);
   const [frameLoading, setFrameLoading] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
+  const [detections, setDetections] = useState<DetectionRecord[]>([]);
+  const [detectionRun, setDetectionRun] = useState<InferenceRunRecord | null>(null);
+  const [detectionsLoading, setDetectionsLoading] = useState(false);
+  const [detectionsError, setDetectionsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -396,6 +219,11 @@ export default function App(): JSX.Element {
     if (selectedDatasetId === null) {
       setSelectedDataset(null);
       setFrames([]);
+      setSelectedFrameId(null);
+      setSelectedFrame(null);
+      setDetectionRun(null);
+      setDetections([]);
+      setDetectionsError(null);
       return;
     }
 
@@ -407,6 +235,9 @@ export default function App(): JSX.Element {
       setSelectedFrameId(null);
       setSelectedFrame(null);
       setFrameError(null);
+      setDetectionRun(null);
+      setDetections([]);
+      setDetectionsError(null);
 
       try {
         const payload = await fetchJson<FrameListResponse>(
@@ -446,6 +277,10 @@ export default function App(): JSX.Element {
       setSelectedFrame(null);
       setFrameLoading(false);
       setFrameError(null);
+      setDetections([]);
+      setDetectionRun(null);
+      setDetectionsLoading(false);
+      setDetectionsError(null);
       return;
     }
 
@@ -491,6 +326,64 @@ export default function App(): JSX.Element {
     };
   }, [selectedDatasetId, selectedFrameId]);
 
+  useEffect(() => {
+    if (selectedDatasetId === null || selectedFrameId === null) {
+      setDetections([]);
+      setDetectionRun(null);
+      setDetectionsLoading(false);
+      setDetectionsError(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadDetections() {
+      setDetectionsLoading(true);
+      setDetectionsError(null);
+
+      try {
+        const payload = await fetchJson<FrameDetectionsResponse>(
+          `/datasets/${selectedDatasetId}/frames/${selectedFrameId}/detections`,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setDetectionRun(payload.run);
+        setDetections(payload.detections);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        const apiError = error as Partial<ApiError>;
+        setDetections([]);
+
+        if (apiError.status === 404) {
+          setDetectionRun(null);
+          setDetectionsError(null);
+          return;
+        }
+
+        setDetectionRun(null);
+        setDetectionsError(
+          "Unable to load stored detections or run metadata for the selected frame.",
+        );
+      } finally {
+        if (isMounted) {
+          setDetectionsLoading(false);
+        }
+      }
+    }
+
+    void loadDetections();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDatasetId, selectedFrameId]);
+
   return (
     <main className="app-shell">
       <DatasetList
@@ -513,10 +406,12 @@ export default function App(): JSX.Element {
           onSelectFrame={setSelectedFrameId}
         />
         <FramePreview
-          dataset={selectedDataset}
+          datasetName={selectedDataset?.name ?? null}
           selectedFrame={selectedFrame}
-          loading={frameLoading}
-          error={frameError}
+          run={detectionRun}
+          detections={detections}
+          loading={frameLoading || detectionsLoading}
+          error={frameError ?? detectionsError}
         />
       </section>
 

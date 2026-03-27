@@ -1,81 +1,71 @@
 # 08. APIs And Interfaces
 
-Status: Proposed v1
+Status: Updated for implemented Slices 3-7
 
-## FastAPI MVP Surface
+## FastAPI Surface Implemented Today
+
+### Health
+
+- `GET /`
+- `GET /health`
 
 ### Dataset Endpoints
 
-- `POST /api/datasets/load-demo`
-- `POST /api/datasets/upload`
-- `GET /api/datasets`
-- `GET /api/datasets/{datasetId}`
-- `GET /api/datasets/{datasetId}/frames`
+- `POST /datasets/load`
+- `GET /datasets`
+- `GET /datasets/{dataset_id}/frames`
+- `GET /datasets/{dataset_id}/frames/{frame_id}`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/preview`
 
-### Run Endpoints
+### Detection Run Endpoints
 
-- `POST /api/datasets/{datasetId}/runs/detect`
-- `POST /api/datasets/{datasetId}/runs/depth`
-- `GET /api/runs`
-- `GET /api/runs/{runId}`
-- `GET /api/runs/{runId}/status`
+- `POST /datasets/{dataset_id}/runs/detect`
+- `GET /runs/{run_id}`
+- `GET /runs/{run_id}/status`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/detections`
 
-### Frame And Detection Endpoints
-
-- `GET /api/frames/{frameId}`
-- `GET /api/frames/{frameId}/detections`
-- `GET /api/frames/{frameId}/depth`
-- `GET /api/frames/{frameId}/point-cloud`
-
-### Correction Endpoints
-
-- `POST /api/detections/{detectionId}/corrections`
-- `GET /api/detections/{detectionId}/corrections`
-- `PATCH /api/detections/{detectionId}/review-status`
-
-### Metrics And Export Endpoints
-
-- `GET /api/metrics/summary`
-- `GET /api/metrics/runs/{runId}`
-- `GET /api/exports/corrections`
-- `GET /api/exports/detections`
+The frame-detections endpoint returns the latest detection run for the dataset by default and can optionally be filtered with `run_id`.
 
 ## Thin .NET Bridge Surface
 
-The .NET slice should stay intentionally small.
+The bridge remains intentionally small in Slice 5:
 
 - `GET /bridge/health`
-- `GET /bridge/runs/summary`
 - `GET /bridge/datasets/summary`
+
+## Planned Next Surface
+
+These interfaces remain planned but are not implemented yet:
+
+- correction endpoints
+- depth and point-cloud endpoints
+- metrics endpoints
+- export endpoints
 
 ## Interface Contract Principles
 
-- FastAPI is the client-facing backend for the MVP.
-- Each run must include explicit run type, model version, and processing status.
-- Detection, correction, depth, and point-cloud payloads must be stable enough to support replayable demos.
-- The .NET bridge should consume or proxy only summary-level metadata so it proves interoperability without duplicating FastAPI logic.
+- FastAPI is the client-facing backend for the current MVP slices.
+- Detection runs include explicit run type, model version, processing counts, and status.
+- Detection payloads remain stable enough for replayable frontend overlays.
+- The .NET bridge consumes summary-level metadata only and does not duplicate FastAPI write ownership.
 
 ## Example Flow
 
-1. Frontend loads a demo dataset or uploads a local dataset.
-2. Frontend starts a detection run for the dataset.
-3. FastAPI processes frames and persists structured detections.
-4. Frontend requests detections and overlays them in the viewer.
-5. Frontend starts a depth run or fetches an existing depth artifact.
-6. Frontend requests a point-cloud artifact for 3D inspection.
-7. User edits a detection and saves a correction.
-8. Metrics and exports reflect the corrected state.
-9. Optional .NET bridge exposes summary endpoints that can be shown as enterprise-facing integration touchpoints.
+1. Frontend requests `GET /datasets` and selects a loaded dataset.
+2. Frontend requests `GET /datasets/{dataset_id}/frames` to render map markers.
+3. User selects a frame marker and the frontend requests frame detail and preview.
+4. Frontend requests `GET /datasets/{dataset_id}/frames/{frame_id}/detections`.
+5. The image viewer renders stored boxes using the persisted pixel-space contract and displays the latest run status.
+6. Future slices add correction persistence, depth, 3D, metrics, and export.
 
 ## Required Payload Contracts
 
-- Dataset frame records must include image path, latitude, longitude, heading, timestamp, width, and height.
-- Detection records must include frame id, class label, confidence, and bounding box in image pixel space.
-- Depth records must include frame id, depth artifact URI, width, height, and depth scale.
-- Point-cloud records must include frame id, point count, coordinate system, and downloadable asset reference.
+- Dataset frame records include image path, latitude, longitude, heading, timestamp, width, and height.
+- Detection records include frame id, class label, confidence, and bounding box in image pixel space.
+- Bounding boxes remain in `x_min`, `y_min`, `x_max`, `y_max` image coordinates until the frontend scales them for display.
 
 ## External Integrations
 
-- Map tiles and basemaps via Mapbox or equivalent
-- Object storage for dataset assets
-- Optional post-MVP auth provider if the project later grows beyond local demo mode
+- local file-backed dataset storage for the current demo slices
+- Ultralytics YOLO weights for detection
+- optional map tiles or richer basemaps remain deferred
