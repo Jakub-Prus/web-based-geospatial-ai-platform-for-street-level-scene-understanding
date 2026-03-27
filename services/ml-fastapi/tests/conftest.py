@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tarfile
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -116,12 +117,35 @@ def sample_dataset(tmp_path: Path) -> tuple[Path, Path]:
 
 
 @pytest.fixture()
-def test_client(tmp_path: Path) -> TestClient:
-    database_path = tmp_path / "test-platform.db"
-    os.environ["ML_FASTAPI_DB_PATH"] = str(database_path)
-    app = create_app()
+def test_client_factory(
+    tmp_path: Path,
+) -> Iterator[Callable[..., TestClient]]:
+    clients: list[TestClient] = []
+    client_count = 0
 
-    with TestClient(app) as client:
-        yield client
+    def _build_test_client(*, detector_factory=None) -> TestClient:
+        nonlocal client_count
+
+        database_path = tmp_path / f"test-platform-{client_count}.db"
+        client_count += 1
+        os.environ["ML_FASTAPI_DB_PATH"] = str(database_path)
+        app = create_app(detector_factory=detector_factory)
+        client = TestClient(app)
+        clients.append(client)
+        client.__enter__()
+
+        return client
+
+    yield _build_test_client
+
+    while clients:
+        client = clients.pop()
+        client.__exit__(None, None, None)
 
     os.environ.pop("ML_FASTAPI_DB_PATH", None)
+
+
+@pytest.fixture()
+def test_client(test_client_factory: Callable[..., TestClient]) -> Iterator[TestClient]:
+    client = test_client_factory()
+    yield client

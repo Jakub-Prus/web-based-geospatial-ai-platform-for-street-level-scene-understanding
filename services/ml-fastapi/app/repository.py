@@ -3,7 +3,13 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterable
 
-from app.database import DATASETS_TABLE_NAME, FRAMES_TABLE_NAME
+from app.database import (
+    DATASETS_TABLE_NAME,
+    DETECTIONS_TABLE_NAME,
+    FRAMES_TABLE_NAME,
+    INFERENCE_RUNS_TABLE_NAME,
+)
+from app.inference import RUN_STATUS_FAILED
 
 
 class DatasetRepository:
@@ -119,6 +125,65 @@ class DatasetRepository:
 
         return dict(row)
 
+    def get_detection_run(self, run_id: int) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                id,
+                dataset_id,
+                run_type,
+                status,
+                model_name,
+                model_path,
+                frame_count,
+                processed_frame_count,
+                detection_count,
+                error_message,
+                started_at,
+                completed_at
+            FROM {INFERENCE_RUNS_TABLE_NAME}
+            WHERE id = ?
+            """,
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(run_id)
+
+        return dict(row)
+
+    def get_latest_detection_run_for_dataset(
+        self,
+        dataset_id: int,
+        run_type: str,
+    ) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                id,
+                dataset_id,
+                run_type,
+                status,
+                model_name,
+                model_path,
+                frame_count,
+                processed_frame_count,
+                detection_count,
+                error_message,
+                started_at,
+                completed_at
+            FROM {INFERENCE_RUNS_TABLE_NAME}
+            WHERE dataset_id = ?
+              AND run_type = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (dataset_id, run_type),
+        ).fetchone()
+        if row is None:
+            raise KeyError((dataset_id, run_type))
+
+        return dict(row)
+
     def list_frames_for_dataset(self, dataset_id: int) -> list[dict[str, object]]:
         rows = self.connection.execute(
             f"""
@@ -140,6 +205,25 @@ class DatasetRepository:
             FROM {FRAMES_TABLE_NAME}
             WHERE dataset_id = ?
             ORDER BY timestamp ASC, frame_id ASC
+            """,
+            (dataset_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_frames_for_inference(self, dataset_id: int) -> list[dict[str, object]]:
+        rows = self.connection.execute(
+            f"""
+            SELECT
+                frames.frame_id,
+                frames.image_path,
+                frames.image_width,
+                frames.image_height,
+                datasets.source_path AS dataset_source_path
+            FROM {FRAMES_TABLE_NAME} AS frames
+            INNER JOIN {DATASETS_TABLE_NAME} AS datasets
+                ON datasets.id = frames.dataset_id
+            WHERE frames.dataset_id = ?
+            ORDER BY frames.timestamp ASC, frames.frame_id ASC
             """,
             (dataset_id,),
         ).fetchall()
@@ -176,3 +260,184 @@ class DatasetRepository:
             raise KeyError((dataset_id, frame_id))
 
         return dict(row)
+
+    def create_inference_run(
+        self,
+        *,
+        dataset_id: int,
+        run_type: str,
+        status: str,
+        model_name: str,
+        model_path: str,
+        frame_count: int,
+        started_at: str,
+    ) -> dict[str, object]:
+        with self.connection:
+            cursor = self.connection.execute(
+                f"""
+                INSERT INTO {INFERENCE_RUNS_TABLE_NAME} (
+                    dataset_id,
+                    run_type,
+                    status,
+                    model_name,
+                    model_path,
+                    frame_count,
+                    processed_frame_count,
+                    detection_count,
+                    started_at,
+                    completed_at,
+                    error_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    dataset_id,
+                    run_type,
+                    status,
+                    model_name,
+                    model_path,
+                    frame_count,
+                    0,
+                    0,
+                    started_at,
+                    None,
+                    None,
+                ),
+            )
+
+        return self.get_detection_run(int(cursor.lastrowid))
+
+    def finalize_inference_run(
+        self,
+        *,
+        run_id: int,
+        status: str,
+        processed_frame_count: int,
+        detection_count: int,
+        completed_at: str,
+        detections: Iterable[dict[str, object]],
+    ) -> dict[str, object]:
+        detections_to_insert = list(detections)
+
+        with self.connection:
+            if detections_to_insert:
+                self.connection.executemany(
+                    f"""
+                    INSERT INTO {DETECTIONS_TABLE_NAME} (
+                        inference_run_id,
+                        frame_id,
+                        class_name,
+                        confidence_score,
+                        x_min,
+                        y_min,
+                        x_max,
+                        y_max,
+                        created_at
+                    ) VALUES (
+                        :inference_run_id,
+                        :frame_id,
+                        :class_name,
+                        :confidence_score,
+                        :x_min,
+                        :y_min,
+                        :x_max,
+                        :y_max,
+                        :created_at
+                    )
+                    """,
+                    detections_to_insert,
+                )
+
+            self.connection.execute(
+                f"""
+                UPDATE {INFERENCE_RUNS_TABLE_NAME}
+                SET
+                    status = ?,
+                    processed_frame_count = ?,
+                    detection_count = ?,
+                    completed_at = ?,
+                    error_message = NULL
+                WHERE id = ?
+                """,
+                (
+                    status,
+                    processed_frame_count,
+                    detection_count,
+                    completed_at,
+                    run_id,
+                ),
+            )
+
+        return self.get_detection_run(run_id)
+
+    def mark_inference_run_failed(
+        self,
+        *,
+        run_id: int,
+        processed_frame_count: int,
+        completed_at: str,
+        error_message: str,
+    ) -> dict[str, object]:
+        with self.connection:
+            self.connection.execute(
+                f"""
+                UPDATE {INFERENCE_RUNS_TABLE_NAME}
+                SET
+                    status = ?,
+                    processed_frame_count = ?,
+                    detection_count = 0,
+                    completed_at = ?,
+                    error_message = ?
+                WHERE id = ?
+                """,
+                (
+                    RUN_STATUS_FAILED,
+                    processed_frame_count,
+                    completed_at,
+                    error_message,
+                    run_id,
+                ),
+            )
+
+        return self.get_detection_run(run_id)
+
+    def list_detections_for_frame(
+        self,
+        *,
+        dataset_id: int,
+        frame_id: str,
+        run_id: int | None = None,
+        run_type: str,
+    ) -> tuple[dict[str, object], list[dict[str, object]]]:
+        run_record = (
+            self.get_detection_run(run_id)
+            if run_id is not None
+            else self.get_latest_detection_run_for_dataset(dataset_id, run_type)
+        )
+        if (
+            int(run_record["dataset_id"]) != dataset_id
+            or run_record["run_type"] != run_type
+        ):
+            raise KeyError((dataset_id, frame_id, run_id))
+
+        rows = self.connection.execute(
+            f"""
+            SELECT
+                id,
+                inference_run_id,
+                frame_id,
+                class_name,
+                confidence_score,
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+                created_at
+            FROM {DETECTIONS_TABLE_NAME}
+            WHERE inference_run_id = ?
+              AND frame_id = ?
+            ORDER BY confidence_score DESC, id ASC
+            """,
+            (run_record["id"], frame_id),
+        ).fetchall()
+
+        return dict(run_record), [dict(row) for row in rows]

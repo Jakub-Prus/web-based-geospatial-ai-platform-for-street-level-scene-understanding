@@ -5,6 +5,8 @@ from pathlib import Path
 
 DATASETS_TABLE_NAME = "datasets"
 FRAMES_TABLE_NAME = "frames"
+INFERENCE_RUNS_TABLE_NAME = "inference_runs"
+DETECTIONS_TABLE_NAME = "detections"
 FRAME_UNIQUE_INDEX_NAME = "idx_frames_dataset_id_frame_id"
 LEGACY_FRAME_PRIMARY_KEY_COLUMN = "frame_id"
 FRAME_PRIMARY_KEY_COLUMN = "id"
@@ -59,6 +61,48 @@ def initialize_database(database_path: Path) -> None:
 
             CREATE INDEX IF NOT EXISTS {FRAME_UNIQUE_INDEX_NAME}
             ON {FRAMES_TABLE_NAME}(dataset_id, frame_id);
+
+            CREATE TABLE IF NOT EXISTS {INFERENCE_RUNS_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dataset_id INTEGER NOT NULL,
+                run_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                model_path TEXT NOT NULL,
+                frame_count INTEGER NOT NULL,
+                processed_frame_count INTEGER NOT NULL DEFAULT 0,
+                detection_count INTEGER NOT NULL DEFAULT 0,
+                error_message TEXT,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                FOREIGN KEY (dataset_id) REFERENCES {DATASETS_TABLE_NAME}(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_inference_runs_dataset_id
+            ON {INFERENCE_RUNS_TABLE_NAME}(dataset_id);
+
+            CREATE INDEX IF NOT EXISTS idx_inference_runs_dataset_id_run_type
+            ON {INFERENCE_RUNS_TABLE_NAME}(dataset_id, run_type);
+
+            CREATE TABLE IF NOT EXISTS {DETECTIONS_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inference_run_id INTEGER NOT NULL,
+                frame_id TEXT NOT NULL,
+                class_name TEXT NOT NULL,
+                confidence_score REAL NOT NULL,
+                x_min REAL NOT NULL,
+                y_min REAL NOT NULL,
+                x_max REAL NOT NULL,
+                y_max REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (inference_run_id) REFERENCES {INFERENCE_RUNS_TABLE_NAME}(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_detections_inference_run_id
+            ON {DETECTIONS_TABLE_NAME}(inference_run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_detections_frame_id
+            ON {DETECTIONS_TABLE_NAME}(frame_id);
             """
         )
 

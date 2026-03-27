@@ -9,6 +9,10 @@ class DatasetLoadRequest(BaseModel):
     preview_archive_path: str | None = None
 
 
+class DetectionRunRequest(BaseModel):
+    model_path: str | None = None
+
+
 class DatasetRecord(BaseModel):
     id: int
     name: str
@@ -56,3 +60,41 @@ class FrameDetailRecord(FrameRecord):
 
 class FrameDetailResponse(BaseModel):
     frame: FrameDetailRecord
+
+
+class InferenceRunRecord(BaseModel):
+    id: int
+    dataset_id: int
+    run_type: str
+    status: str
+    model_name: str
+    model_path: str
+    frame_count: int
+    processed_frame_count: int
+    detection_count: int
+    error_message: str | None = None
+    started_at: str
+    completed_at: str | None = None
+
+
+class DetectionRunResponse(BaseModel):
+    run: InferenceRunRecord
+
+
+class DetectionRecord(BaseModel):
+    id: int
+    inference_run_id: int
+    frame_id: str
+    class_name: str
+    confidence_score: float
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    created_at: str
+
+
+class FrameDetectionsResponse(BaseModel):
+    frame_id: str
+    run: InferenceRunRecord
+    detections: list[DetectionRecord] = Field(default_factory=list)

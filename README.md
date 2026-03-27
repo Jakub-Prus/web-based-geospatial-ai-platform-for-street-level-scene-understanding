@@ -76,3 +76,16 @@ Bridge endpoints:
 - `GET /bridge/datasets/summary`
 
 The dataset summary endpoint proxies FastAPI `GET /datasets`, returning dataset counts, total frame counts, and per-dataset summary metadata without introducing write behavior or duplicate data ownership in `.NET`.
+
+## Slice 6 Detection Backend
+
+FastAPI now supports persisted detection runs backed by `data/raw/models/yolo11n.pt`.
+
+Detection endpoints:
+
+- `POST /datasets/{dataset_id}/runs/detect`
+- `GET /runs/{run_id}`
+- `GET /runs/{run_id}/status`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/detections`
+
+Each run persists explicit `running`, `completed`, `empty`, or `failed` state plus stored bounding boxes in image pixel coordinates for later overlay and correction slices.

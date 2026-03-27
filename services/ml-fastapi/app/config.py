@@ -10,6 +10,7 @@ REPO_ROOT = SERVICES_DIR.parent
 
 DEFAULT_DATASET_PATH = REPO_ROOT / "data" / "raw" / "a2d2-subset"
 DEFAULT_PREVIEW_ARCHIVE_PATH = REPO_ROOT / "data" / "raw" / "a2d2-preview.tar"
+DEFAULT_DETECTION_MODEL_PATH = REPO_ROOT / "data" / "raw" / "models" / "yolo11n.pt"
 DEFAULT_DB_DIRECTORY = SERVICE_DIR / "data"
 DEFAULT_DB_PATH = DEFAULT_DB_DIRECTORY / "platform.db"
 
@@ -36,3 +37,11 @@ def resolve_preview_archive_path() -> Path:
         return Path(configured_path).resolve()
 
     return DEFAULT_PREVIEW_ARCHIVE_PATH
+
+
+def resolve_default_detection_model_path() -> Path:
+    configured_path = os.getenv("YOLO_DETECTION_MODEL_PATH")
+    if configured_path:
+        return Path(configured_path).resolve()
+
+    return DEFAULT_DETECTION_MODEL_PATH
