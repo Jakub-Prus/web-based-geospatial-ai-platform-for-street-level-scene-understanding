@@ -47,7 +47,7 @@ For the standard local setup, install:
 If you want to run the apps outside containers for development, also install:
 
 - Node.js 20
-- Python 3.12
+- Python 3.10
 - .NET 8 SDK
 
 ### 1. One-command bootstrap
