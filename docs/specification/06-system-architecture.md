@@ -1,6 +1,6 @@
 # 06. System Architecture
 
-Status: Updated after Slice 11
+Status: Updated after Slice 12
 
 ## High-Level Components
 
@@ -17,6 +17,7 @@ Status: Updated after Slice 11
 
 - Presents map and street-level viewer workflows
 - Renders overlays and focused single-box annotation tools
+- Renders selected-frame point clouds with Three.js orbit controls
 - Displays monitoring dashboards and job state
 - Renders point-cloud-style 3D output from depth-derived data
 
@@ -44,9 +45,10 @@ Status: Updated after Slice 11
 4. FastAPI runs or schedules inference and depth processing.
 5. Detection outputs are stored in SQLite, depth artifacts are stored as local `.npy` files, and point-cloud artifacts are stored as local `.npz` files plus SQLite metadata for later map, image, and 3D rendering.
 6. Optional .NET bridge reads run metadata and exposes summary endpoints.
-7. Frontend retrieves map data, imagery references, detections, depth-derived geometry, and review state.
-8. User selects one detection, edits or redraws the box inside the image bounds, and saves corrections through the FastAPI service.
-9. Monitoring views aggregate original output and correction outcomes.
+7. Frontend retrieves map data, imagery references, detections, point-cloud payloads, and review state.
+8. User selects one frame, inspects both 2D detections and the local 3D point cloud, then edits or redraws one box inside the image bounds when needed.
+9. FastAPI serves the stored point-cloud payload while the frontend renders it with local camera-space controls and fallback states.
+10. Monitoring views aggregate original output and correction outcomes.
 
 ## Current Persistence Note
 

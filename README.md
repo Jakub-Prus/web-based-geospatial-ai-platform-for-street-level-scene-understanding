@@ -1,8 +1,8 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 11 point-cloud conversion workspace for the planned geospatial AI demo platform.
+Slice 12 Three.js viewer workspace for the planned geospatial AI demo platform.
 
-Slices `0` through `11` are now implemented:
+Slices `0` through `12` are now implemented:
 
 - dataset contract and geometry contract are frozen
 - React, FastAPI, and .NET service skeletons are in place
@@ -15,6 +15,7 @@ Slices `0` through `11` are now implemented:
 - one selected detection can now be relabeled, moved, resized, redrawn, clipped to image bounds, and saved from the frontend
 - one selected frame can now produce a persisted depth artifact with validated source-image dimensions and clear missing-depth fallback state
 - one selected frame can now return a stable stored point-cloud payload in a documented local camera coordinate system
+- one selected frame can now render its stored point-cloud artifact in an interactive Three.js viewer with orbit controls plus loading, missing, and failed 3D states
 
 ## Specification Docs
 
@@ -355,6 +356,18 @@ Each point-cloud artifact includes:
 
 Point payload generation is deterministic for a given stored depth artifact. The service uses row-major subsampling with a default browser-safe cap of `20,000` points, and `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud` returns the latest inline sampled XYZ payload for the frame.
 
+## Slice 12 Three.js Viewer
+
+The frontend review workspace now includes a Three.js point-cloud panel for the selected frame.
+
+The viewer now supports:
+
+- loading the stored point-cloud artifact for the currently selected frame
+- rendering sampled XYZ points inside a local camera-space Three.js scene
+- basic orbit controls for rotate, zoom, and pan
+- readable empty, missing, running, and failed 3D states without breaking the 2D review flow
+- artifact metadata for rendered point count, source point count, subsample step, coordinate system, and intrinsics source
+
 ## Local Verification
 
 Frontend checks:
@@ -366,7 +379,7 @@ npm test
 npm run build
 ```
 
-Frontend coverage currently runs through Vitest with V8 coverage and passes at `75.19%` total coverage while exercising dataset selection, correction-aware overlay rendering, annotation geometry helpers, and correction-save behavior.
+Frontend coverage currently runs through Vitest with V8 coverage and passes at `76.38%` total coverage while exercising dataset selection, correction-aware overlay rendering, point-cloud fetch and state handling, Three.js scene setup through mocked canvas tests, annotation geometry helpers, and correction-save behavior.
 
 FastAPI checks:
 
@@ -399,5 +412,17 @@ Slice 11 real-asset verification:
 - coordinate system: `camera_local_right_handed_x_right_y_up_z_forward`
 - intrinsics source: `frame_metadata`
 - stability check: two consecutive conversions returned identical ordered XYZ payloads for the same stored depth artifact
+
+Slice 12 real-asset verification:
+
+- isolated backend URL: `http://127.0.0.1:8010`
+- dataset: `data/raw/a2d2-subset/`
+- verified frame: `20190401121727_camera_frontright_000013460`
+- depth verification state: `completed`
+- point-cloud verification state: `completed`
+- rendered point count: `19,988`
+- source valid depth pixels: `1,938,775`
+- coordinate system: `camera_local_right_handed_x_right_y_up_z_forward`
+- frontend verification path: selected-frame point-cloud fetch plus Three.js canvas tests with control initialization and cleanup coverage
 
 .NET bridge tests require a local `.NET` SDK, not just the runtime. In the current environment `dotnet.exe` is present, but `dotnet --list-sdks` returns no installed SDKs.

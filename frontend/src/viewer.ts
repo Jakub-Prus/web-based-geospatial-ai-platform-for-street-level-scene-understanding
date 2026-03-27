@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import type {
   DetectionRecord,
   FrameDetailRecord,
+  FramePointCloudResponse,
   FrameRecord,
   InferenceRunRecord,
 } from "./types";
@@ -48,6 +49,12 @@ export type ViewerMessage = {
   title: string;
   description: string;
   tone: ViewerMessageTone;
+};
+
+export type PointCloudSummary = {
+  renderedPointCount: number;
+  sourcePointCount: number;
+  subsampleStep: number;
 };
 
 export type DetectionBoxLayout = {
@@ -248,6 +255,10 @@ export function buildCorrectionsPath(datasetId: number, frameId: string): string
   return `/datasets/${datasetId}/frames/${frameId}/corrections`;
 }
 
+export function buildPointCloudPath(datasetId: number, frameId: string): string {
+  return `/datasets/${datasetId}/frames/${frameId}/point-cloud`;
+}
+
 export function describeRunStatus(run: InferenceRunRecord): {
   label: string;
   tone: ViewerMessageTone;
@@ -327,6 +338,104 @@ export function buildViewerMessage(
       description:
         "The latest stored run does not contain any bounding boxes for the selected image.",
       tone: run.status === "empty" ? "warning" : "neutral",
+    };
+  }
+
+  return null;
+}
+
+export function buildPointCloudSummary(
+  response: FramePointCloudResponse | null,
+): PointCloudSummary | null {
+  const artifact = response?.artifact;
+
+  if (artifact === null || artifact === undefined) {
+    return null;
+  }
+
+  return {
+    renderedPointCount: artifact.point_count,
+    sourcePointCount: artifact.source_point_count,
+    subsampleStep: artifact.subsample_step,
+  };
+}
+
+export function buildPointCloudViewerMessage(
+  response: FramePointCloudResponse | null,
+  isLoading: boolean,
+  error: string | null,
+  renderError: string | null,
+): ViewerMessage | null {
+  if (isLoading) {
+    return {
+      title: "Loading 3D point cloud",
+      description: "Stored point-cloud data is loading for this selected frame.",
+      tone: "neutral",
+    };
+  }
+
+  if (error !== null) {
+    return {
+      title: "Unable to load 3D view",
+      description: error,
+      tone: "error",
+    };
+  }
+
+  if (renderError !== null) {
+    return {
+      title: "Unable to render 3D view",
+      description: renderError,
+      tone: "error",
+    };
+  }
+
+  if (response === null) {
+    return {
+      title: "No point cloud yet",
+      description:
+        "Select a stored frame and generate Slice 11 point-cloud output before expecting a 3D view.",
+      tone: "warning",
+    };
+  }
+
+  if (response.state === "missing") {
+    return {
+      title: "No point cloud yet",
+      description:
+        response.detail ??
+        "Generate Slice 11 point-cloud output for this frame before expecting 3D inspection.",
+      tone: "warning",
+    };
+  }
+
+  if (response.state === "running") {
+    return {
+      title: "3D generation in progress",
+      description:
+        response.detail ??
+        "Point-cloud generation is still running for this frame. Refresh after it completes.",
+      tone: "warning",
+    };
+  }
+
+  if (response.state === "failed") {
+    return {
+      title: "3D generation failed",
+      description:
+        response.detail ??
+        "The latest point-cloud run failed, so no interactive 3D view is available for this frame.",
+      tone: "error",
+    };
+  }
+
+  const pointCount = response.payload?.points.length ?? 0;
+  if (pointCount === 0) {
+    return {
+      title: "Point cloud is empty",
+      description:
+        "The latest point-cloud artifact loaded successfully, but it does not contain any renderable points.",
+      tone: "warning",
     };
   }
 

@@ -2,6 +2,7 @@ import type {
   DetectionCorrectionRecord,
   DetectionRecord,
   FrameDetailRecord,
+  FramePointCloudResponse,
   InferenceRunRecord,
 } from "../types";
 
@@ -94,5 +95,51 @@ export const sampleSavedCorrection: DetectionCorrectionRecord = {
     x_max: 1920,
     y_max: 560,
     source: "corrected",
+  },
+};
+
+export const samplePointCloudResponse: FramePointCloudResponse = {
+  frame_id: "frame-001",
+  state: "completed",
+  detail: null,
+  run: {
+    id: 12,
+    dataset_id: 1,
+    frame_id: "frame-001",
+    run_type: "point_cloud",
+    status: "completed",
+    model_name: "stored-depth-conversion",
+    model_path: "depth/run-1.npy",
+    frame_count: 1,
+    processed_frame_count: 1,
+    detection_count: 0,
+    error_message: null,
+    started_at: "2026-03-20T10:21:00Z",
+    completed_at: "2026-03-20T10:21:05Z",
+  },
+  artifact: {
+    id: 22,
+    inference_run_id: 12,
+    frame_id: "frame-001",
+    source_depth_artifact_id: 9,
+    point_cloud_uri: "dataset-1/frame-001/run-12.npz",
+    point_format: "float32_npz_xyz",
+    coordinate_system: "camera_local_right_handed_x_right_y_up_z_forward",
+    source_point_count: 6,
+    point_count: 3,
+    subsample_step: 2,
+    intrinsics_source: "frame_metadata",
+    fx: 812.1,
+    fy: 811.0,
+    cx: 999.3,
+    cy: 650.7,
+    created_at: "2026-03-20T10:21:05Z",
+  },
+  payload: {
+    points: [
+      { x: -0.375, y: 0.125, z: 1 },
+      { x: -0.125, y: -0.125, z: 1.5 },
+      { x: 0.25, y: -0.2, z: 2.2 },
+    ],
   },
 };

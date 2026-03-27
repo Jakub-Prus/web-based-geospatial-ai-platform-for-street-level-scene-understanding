@@ -35,11 +35,12 @@ function DatasetList({
   return (
     <section className="dataset-panel">
       <div className="section-header">
-        <p className="eyebrow">Slice 9</p>
-        <h1>Detection editing workspace</h1>
+        <p className="eyebrow">Slice 12</p>
+        <h1>Frame review workspace</h1>
         <p className="panel-copy">
           Choose a loaded dataset, inspect stored camera locations, and open a
-          frame viewer where one persisted detection can be corrected at a time.
+          frame viewer where stored detections and one persisted point-cloud
+          artifact can be inspected together.
         </p>
       </div>
 

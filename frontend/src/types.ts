@@ -46,6 +46,7 @@ export type InferenceRunRecord = {
   id: number;
   dataset_id: number;
   run_type: string;
+  frame_id?: string | null;
   status: string;
   model_name: string;
   model_path: string;
@@ -123,4 +124,44 @@ export type SaveCorrectionRequest = {
 
 export type DetectionCorrectionResponse = {
   correction: DetectionCorrectionRecord;
+};
+
+export type PointCloudState = "missing" | "running" | "completed" | "failed";
+
+export type PointCloudArtifactRecord = {
+  id: number;
+  inference_run_id: number;
+  frame_id: string;
+  source_depth_artifact_id: number;
+  point_cloud_uri: string;
+  point_format: string;
+  coordinate_system: string;
+  source_point_count: number;
+  point_count: number;
+  subsample_step: number;
+  intrinsics_source: string;
+  fx: number;
+  fy: number;
+  cx: number;
+  cy: number;
+  created_at: string;
+};
+
+export type PointCloudPointRecord = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type PointCloudPayloadRecord = {
+  points: PointCloudPointRecord[];
+};
+
+export type FramePointCloudResponse = {
+  frame_id: string;
+  state: PointCloudState;
+  detail: string | null;
+  run: InferenceRunRecord | null;
+  artifact: PointCloudArtifactRecord | null;
+  payload: PointCloudPayloadRecord | null;
 };

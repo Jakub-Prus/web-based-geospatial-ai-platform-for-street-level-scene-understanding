@@ -1,12 +1,12 @@
 # 09. UI And UX
 
-Status: Updated after Slice 9
+Status: Updated after Slice 12
 
 ## Current Screens
 
 - dataset selection and spatial browsing workspace
 - street-image review workspace with single-detection editing
-- planned 3D point-cloud viewer
+- selected-frame 3D point-cloud viewer
 - planned monitoring dashboard
 - planned export panel
 
@@ -15,7 +15,7 @@ Status: Updated after Slice 9
 The implemented workspace is currently a two-panel review layout:
 
 - left panel: map with stored camera positions and frame selection
-- right panel: street-level image viewer with persisted bounding boxes, run metadata, and a focused annotation editor
+- right panel: street-level image viewer with persisted bounding boxes, run metadata, a selected-frame Three.js point-cloud viewer, and a focused annotation editor
 
 The annotation editor is intentionally scoped to one existing detection at a time:
 
@@ -35,7 +35,7 @@ The annotation editor is intentionally scoped to one existing detection at a tim
 5. User inspects detections, labels, confidence values, and run status.
 6. User selects one incorrect detection and edits the label or box directly in the image viewer.
 7. User saves the corrected state and sees the effective detection update without losing the original model output.
-8. Future slice: user opens the 3D view for the same frame.
+8. User inspects the same frame in the Three.js point-cloud view with orbit controls.
 9. Future slice: user views updated metrics.
 
 ## Visualization Requirements
@@ -45,10 +45,11 @@ The annotation editor is intentionally scoped to one existing detection at a tim
 - The current UI must expose run state clearly for completed, empty, failed, and missing-run cases.
 - The current UI must allow move, resize, redraw, relabel, and save for one selected detection.
 - The current UI must clip edited coordinates to the image bounds and reject collapsed boxes with understandable errors.
+- The current UI must expose loading, missing, running, failed, and empty-point-cloud states for the selected frame.
 - Future slice: the image viewer should support zoom and pan.
 - Future slice: the annotation UI should allow deletion and approval-state controls.
 - Future slice: the review UI should expose `pending`, `approved`, and `rejected` states backed by the Slice 8 correction endpoints.
-- The 3D view must render depth-derived point data in Three.js.
+- The 3D view must render depth-derived point data in Three.js with rotate, zoom, and pan controls.
 
 ## Current Empty States
 
@@ -61,6 +62,13 @@ The Slice 9 viewer should remain understandable in each of these states:
 - latest run exists but the selected frame has no stored detections
 - edited box clips to an image edge
 - user attempts to save a collapsed or otherwise invalid box
+
+The Slice 12 point-cloud viewer should remain understandable in each of these states:
+
+- no point-cloud artifact exists yet for the selected frame
+- point-cloud generation is still running
+- latest point-cloud run failed
+- latest point-cloud artifact loads but contains no renderable points
 
 ## UX Quality Bar
 

@@ -5,6 +5,10 @@ import { DetectionViewer } from "./DetectionViewer";
 import { sampleDetections, sampleFrame, sampleRun, sampleSavedCorrection } from "./test/fixtures";
 import { buildDetectionBoxLayout, buildViewerMessage } from "./viewer";
 
+vi.mock("./PointCloudViewer", () => ({
+  PointCloudViewer: () => <div>3D viewer stub</div>,
+}));
+
 function createJsonResponse(payload: object, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,

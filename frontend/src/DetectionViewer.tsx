@@ -22,6 +22,7 @@ import {
   type Point,
   type ResizeHandle,
 } from "./annotation";
+import { PointCloudViewer } from "./PointCloudViewer";
 import type {
   DetectionCorrectionRecord,
   DetectionCorrectionResponse,
@@ -563,8 +564,8 @@ export function DetectionViewer({
         <div>
           <h2>Frame inspection</h2>
           <p className="panel-copy">
-            Select one stored detection, drag or redraw the box inside the image
-            bounds, update the label, and save the correction back to FastAPI.
+            Inspect stored detections in 2D, orbit around the selected frame in
+            3D, and save one correction at a time back to FastAPI.
           </p>
         </div>
         {datasetName ? <span className="stat-pill">{datasetName}</span> : null}
@@ -699,6 +700,8 @@ export function DetectionViewer({
             after enabling redraw mode.
           </figcaption>
         </figure>
+
+        <PointCloudViewer datasetId={datasetId} frame={frame} />
 
         {editableDetections.length > 0 ? (
           <section className="annotation-editor" aria-label="Annotation editor">

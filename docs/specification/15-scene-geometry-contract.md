@@ -1,6 +1,6 @@
 # 15. Scene Geometry Contract
 
-Status: Updated after Slice 11
+Status: Updated after Slice 12
 
 ## Purpose
 
@@ -106,6 +106,8 @@ Chosen convention:
 - `+Z` forward
 
 Slice 11 stores this convention explicitly as `camera_local_right_handed_x_right_y_up_z_forward` on each point-cloud artifact.
+
+Slice 12 keeps the same convention in the frontend Three.js viewer so the selected-frame point cloud renders without axis remapping between backend generation and browser inspection.
 
 ## Point-Cloud Artifact Contract
 

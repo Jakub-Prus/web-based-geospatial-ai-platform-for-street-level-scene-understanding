@@ -13,7 +13,7 @@ The plan is intentionally aligned to the Cyclomedia Full Stack Developer: Geospa
 
 ## Current Build State
 
-Implementation is currently complete through Slice 11:
+Implementation is currently complete through Slice 12:
 
 - dataset loading and validation
 - spatial browsing with stored camera markers
@@ -24,8 +24,9 @@ Implementation is currently complete through Slice 11:
 - single-detection annotation editing with move, resize, redraw, relabel, and bounds clipping
 - persisted MiDaS depth artifacts with explicit missing and failed fallback states
 - persisted point-cloud artifacts generated from stored depth with a documented local camera coordinate system and deterministic subsampling
+- a selected-frame Three.js point-cloud viewer with orbit controls plus loading, missing, running, and failed 3D states
 
-Three.js rendering, metrics, and export remain planned slices.
+Metrics and export remain planned slices.
 
 ## Recommended Reading Order
 

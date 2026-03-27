@@ -3,6 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
+vi.mock("./PointCloudCanvas", () => ({
+  PointCloudCanvas: ({
+    points,
+  }: {
+    points: { x: number; y: number; z: number }[];
+  }) => <div>Rendered points {points.length}</div>,
+}));
+
 const datasetListPayload = {
   datasets: [
     {
@@ -84,6 +92,52 @@ const correctionsPayload = {
   corrections: [],
 };
 
+const pointCloudPayload = {
+  frame_id: "frame-001",
+  state: "completed",
+  detail: null,
+  run: {
+    id: 9,
+    dataset_id: 1,
+    frame_id: "frame-001",
+    run_type: "point_cloud",
+    status: "completed",
+    model_name: "stored-depth-conversion",
+    model_path: "depth/frame-001.npy",
+    frame_count: 1,
+    processed_frame_count: 1,
+    detection_count: 0,
+    error_message: null,
+    started_at: "2026-03-20T10:18:00Z",
+    completed_at: "2026-03-20T10:18:05Z",
+  },
+  artifact: {
+    id: 14,
+    inference_run_id: 9,
+    frame_id: "frame-001",
+    source_depth_artifact_id: 8,
+    point_cloud_uri: "dataset-1/frame-001/run-9.npz",
+    point_format: "float32_npz_xyz",
+    coordinate_system: "camera_local_right_handed_x_right_y_up_z_forward",
+    source_point_count: 5,
+    point_count: 3,
+    subsample_step: 2,
+    intrinsics_source: "frame_metadata",
+    fx: 812.1,
+    fy: 811.0,
+    cx: 999.3,
+    cy: 650.7,
+    created_at: "2026-03-20T10:18:05Z",
+  },
+  payload: {
+    points: [
+      { x: -0.25, y: 0.12, z: 1.1 },
+      { x: -0.1, y: -0.08, z: 1.6 },
+      { x: 0.22, y: -0.18, z: 2.3 },
+    ],
+  },
+};
+
 function createJsonResponse(payload: object, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -133,6 +187,9 @@ describe("App", () => {
         "/datasets/1/frames/frame-001/corrections": createJsonResponse(
           correctionsPayload,
         ),
+        "/datasets/1/frames/frame-001/point-cloud": createJsonResponse(
+          pointCloudPayload,
+        ),
       }),
     );
 
@@ -145,6 +202,8 @@ describe("App", () => {
 
     expect(await screen.findByText("car 92%")).toBeInTheDocument();
     expect(screen.getByText("Stored detection run")).toBeInTheDocument();
+    expect(await screen.findByText("3D point cloud")).toBeInTheDocument();
+    expect(screen.getByText("Rendered points")).toBeInTheDocument();
     expect(screen.getAllByText("A2D2 demo")).toHaveLength(2);
   });
 
@@ -163,6 +222,14 @@ describe("App", () => {
           { detail: "Not found" },
           404,
         ),
+        "/datasets/1/frames/frame-001/point-cloud": createJsonResponse({
+          frame_id: "frame-001",
+          state: "missing",
+          detail: "Generate depth first before requesting a point cloud.",
+          run: null,
+          artifact: null,
+          payload: null,
+        }),
       }),
     );
 
@@ -179,5 +246,6 @@ describe("App", () => {
         /Run Slice 6 detection for this dataset before expecting overlay output/i,
       ),
     ).toBeInTheDocument();
+    expect(await screen.findByText("No point cloud yet")).toBeInTheDocument();
   });
 });

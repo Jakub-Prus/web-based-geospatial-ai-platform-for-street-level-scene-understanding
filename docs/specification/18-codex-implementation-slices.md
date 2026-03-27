@@ -1,6 +1,6 @@
 # 18. Codex Implementation Slices
 
-Status: Active implementation plan, updated after Slice 11
+Status: Active implementation plan, updated after Slice 12
 
 ## Purpose
 
@@ -512,6 +512,8 @@ Current result:
 
 ## Slice 12: Three.js Viewer
 
+Status: Implemented
+
 ### Goal
 
 Display the point cloud interactively in the frontend.
@@ -538,6 +540,14 @@ Display the point cloud interactively in the frontend.
 ### Stop Condition
 
 - A selected frame can be inspected interactively in 3D.
+
+Current result:
+
+- The frontend now loads `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud` when a frame is selected in the existing review workspace.
+- The selected-frame panel renders a Three.js scene with sampled point rendering, orbit controls, a grid helper, and local axes for the stored camera-space artifact.
+- The UI exposes clear loading, missing, running, failed, and empty-point-cloud states without interrupting the existing 2D detection and correction flow.
+- The viewer surfaces artifact metadata including rendered point count, source point count, subsample step, coordinate system, and intrinsics source.
+- Verified Slice 12 stop condition: an isolated FastAPI verification run loaded `data/raw/a2d2-subset/`, generated depth plus point-cloud artifacts for frame `20190401121727_camera_frontright_000013460`, and returned a completed 3D payload with `19,988` rendered points for the selected-frame viewer path.
 
 ## Slice 13: Metrics
 
