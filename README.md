@@ -1,8 +1,8 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 8 correction-persistence workspace for the planned geospatial AI demo platform.
+Slice 9 annotation-editing workspace for the planned geospatial AI demo platform.
 
-Slices `0` through `8` are now implemented:
+Slices `0` through `9` are now implemented:
 
 - dataset contract and geometry contract are frozen
 - React, FastAPI, and .NET service skeletons are in place
@@ -12,6 +12,7 @@ Slices `0` through `8` are now implemented:
 - detection runs are persisted in FastAPI
 - stored detections render in the frontend image viewer with run-state feedback
 - human review corrections are persisted separately from original detections in FastAPI
+- one selected detection can now be relabeled, moved, resized, redrawn, clipped to image bounds, and saved from the frontend
 
 ## Specification Docs
 
@@ -219,16 +220,14 @@ Each run persists explicit `running`, `completed`, `empty`, or `failed` state pl
 
 ## Slice 7 Detection Overlay UI
 
-The selected-frame panel is now a read-only image viewer that renders stored detections directly over the frame image.
+The selected-frame panel renders stored detections directly over the frame image.
 
-The viewer now includes:
+The viewer includes:
 
 - bounding-box overlays scaled from persisted image pixel coordinates
 - class-label and confidence chips inside each rendered box
 - a run-status summary with model name, processed frames, detection counts, and timestamps
 - useful empty states for no selected frame, no run yet, failed run, running run, and no detections for the chosen frame
-
-Editing tools are intentionally deferred to Slice 9.
 
 ## Slice 8 Correction Persistence Backend
 
@@ -246,7 +245,23 @@ Each correction stores:
 - an optional corrected label and corrected bounding-box state
 - timestamps for initial save and latest update
 
-The correction response includes the `original_detection`, optional `corrected_detection`, and the resolved `effective_detection` so the backend can preserve both states without enabling annotation UI yet.
+The correction response includes the `original_detection`, optional `corrected_detection`, and the resolved `effective_detection` so the backend can preserve both states without mutating the raw detection row.
+
+## Slice 9 Annotation Editing UI
+
+The frontend review workspace now includes a focused single-annotation editor for existing detections.
+
+The editor now supports:
+
+- selecting one stored detection at a time from the overlay or the editor list
+- dragging the selected box to move it within the image bounds
+- resizing from the four corner handles
+- redrawing the box directly on the image stage
+- changing the label before save
+- clipping coordinates to image bounds while preserving `x_min`, `y_min`, `x_max`, and `y_max`
+- readable validation errors when a clipped edit collapses to an invalid box
+
+Saved edits post to the existing Slice 8 correction endpoint and update the effective detection state without overwriting the original model output.
 
 ## Local Verification
 
@@ -259,7 +274,7 @@ npm test
 npm run build
 ```
 
-Frontend coverage currently runs through Vitest with V8 coverage and passes at `81.17%` total coverage while exercising the frame-selection and overlay-rendering flow.
+Frontend coverage currently runs through Vitest with V8 coverage and passes at `75.19%` total coverage while exercising dataset selection, correction-aware overlay rendering, annotation geometry helpers, and correction-save behavior.
 
 FastAPI checks:
 

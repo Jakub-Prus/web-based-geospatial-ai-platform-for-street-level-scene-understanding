@@ -91,6 +91,39 @@ export async function fetchJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+export async function sendJson<TResponse>(
+  path: string,
+  method: "POST",
+  body: object,
+): Promise<TResponse> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    let errorDetail = `Request failed for ${path}: ${response.status}`;
+
+    try {
+      const errorPayload = (await response.json()) as { detail?: string };
+      if (errorPayload.detail) {
+        errorDetail = errorPayload.detail;
+      }
+    } catch {
+      // Ignore non-JSON error responses and use the default detail.
+    }
+
+    const error = new Error(errorDetail) as ApiError;
+    error.status = response.status;
+    throw error;
+  }
+
+  return (await response.json()) as TResponse;
+}
+
 export function buildPreviewUrl(previewPath: string): string {
   return new URL(previewPath, apiBaseUrl).toString();
 }
@@ -201,6 +234,18 @@ export function buildDetectionBoxLayout(
       "--detection-accent": accentColor,
     } as CSSProperties,
   };
+}
+
+export function buildCorrectionSavePath(
+  datasetId: number,
+  frameId: string,
+  detectionId: number,
+): string {
+  return `/datasets/${datasetId}/frames/${frameId}/detections/${detectionId}/correction`;
+}
+
+export function buildCorrectionsPath(datasetId: number, frameId: string): string {
+  return `/datasets/${datasetId}/frames/${frameId}/corrections`;
 }
 
 export function describeRunStatus(run: InferenceRunRecord): {

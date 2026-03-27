@@ -1,6 +1,6 @@
 # 18. Codex Implementation Slices
 
-Status: Active implementation plan, updated after Slice 8
+Status: Active implementation plan, updated after Slice 9
 
 ## Purpose
 
@@ -380,6 +380,8 @@ Current result:
 
 ## Slice 9: Annotation Editing UI
 
+Status: Implemented
+
 ### Goal
 
 Make corrections editable in the frontend.
@@ -411,6 +413,14 @@ Make corrections editable in the frontend.
 ### Stop Condition
 
 - A user can visually edit one box and save it successfully.
+
+Current result:
+
+- The frontend loads effective correction state alongside stored detections for the selected frame.
+- A reviewer can select one existing detection from the overlay or the editor list.
+- The selected box can be moved, resized from the corners, or fully redrawn on the image stage.
+- Label edits save through the existing correction endpoint and preserve the original detection separately from the corrected state.
+- Edited boxes are clipped to image bounds, keep `x_min`, `y_min`, `x_max`, and `y_max` semantics, and surface understandable validation errors when a clipped box collapses.
 
 ## Slice 10: Depth Artifact Backend
 

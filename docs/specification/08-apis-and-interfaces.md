@@ -1,6 +1,6 @@
 # 08. APIs And Interfaces
 
-Status: Updated for implemented Slices 3-8
+Status: Updated for implemented Slices 3-9
 
 ## FastAPI Surface Implemented Today
 
@@ -35,6 +35,8 @@ The save-correction endpoint accepts a `review_status` of `pending`, `approved`,
 
 The frame-corrections endpoint defaults to the latest detection run for the dataset, accepts optional `run_id` filtering, and returns the selected run plus the original detection, optional corrected detection, and resolved effective detection state.
 
+The Slice 9 frontend consumes both correction endpoints to load effective detection state for a selected frame and then saves one edited detection at a time after clipping the box to image bounds.
+
 ## Thin .NET Bridge Surface
 
 The bridge remains intentionally small in Slice 5:
@@ -65,8 +67,10 @@ These interfaces remain planned but are not implemented yet:
 3. User selects a frame marker and the frontend requests frame detail and preview.
 4. Frontend requests `GET /datasets/{dataset_id}/frames/{frame_id}/detections`.
 5. The image viewer renders stored boxes using the persisted pixel-space contract and displays the latest run status.
-6. The current backend can save and reload correction state while UI editing remains deferred.
-7. Future slices add annotation tools, depth, 3D, metrics, and export.
+6. Frontend requests `GET /datasets/{dataset_id}/frames/{frame_id}/corrections` to resolve effective detection state for the editor.
+7. User edits one selected box in the image viewer and the frontend clips the box to image bounds before save.
+8. Frontend posts the updated label and bounding box to `POST /datasets/{dataset_id}/frames/{frame_id}/detections/{detection_id}/correction`.
+9. Future slices add depth, 3D, metrics, and export.
 
 ## Required Payload Contracts
 

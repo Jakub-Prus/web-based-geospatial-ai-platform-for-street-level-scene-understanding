@@ -1,0 +1,98 @@
+import type {
+  DetectionCorrectionRecord,
+  DetectionRecord,
+  FrameDetailRecord,
+  InferenceRunRecord,
+} from "../types";
+
+export const sampleFrame: FrameDetailRecord = {
+  frame_id: "frame-001",
+  dataset_id: 1,
+  image_path: "frames/frame-001.png",
+  latitude: 48.14542,
+  longitude: 11.56661,
+  heading_degrees: 92.5,
+  timestamp: "2026-03-20T10:15:00Z",
+  image_width: 1920,
+  image_height: 1080,
+  pitch_degrees: null,
+  roll_degrees: null,
+  camera_intrinsics_json: null,
+  sequence_id: "sequence-1",
+  depth_path: null,
+  preview_url: "/datasets/1/frames/frame-001/preview",
+};
+
+export const sampleRun: InferenceRunRecord = {
+  id: 7,
+  dataset_id: 1,
+  run_type: "detection",
+  status: "completed",
+  model_name: "yolo11n",
+  model_path: "data/raw/models/yolo11n.pt",
+  frame_count: 2,
+  processed_frame_count: 2,
+  detection_count: 3,
+  error_message: null,
+  started_at: "2026-03-20T10:16:00Z",
+  completed_at: "2026-03-20T10:17:00Z",
+};
+
+export const sampleDetections: DetectionRecord[] = [
+  {
+    id: 11,
+    inference_run_id: 7,
+    frame_id: "frame-001",
+    class_name: "car",
+    confidence_score: 0.92,
+    x_min: 96,
+    y_min: 54,
+    x_max: 960,
+    y_max: 540,
+    created_at: "2026-03-20T10:17:00Z",
+  },
+];
+
+export const sampleSavedCorrection: DetectionCorrectionRecord = {
+  id: 31,
+  detection_id: 11,
+  review_status: "pending",
+  created_at: "2026-03-20T10:18:00Z",
+  updated_at: "2026-03-20T10:18:00Z",
+  original_detection: {
+    detection_id: 11,
+    inference_run_id: 7,
+    frame_id: "frame-001",
+    class_name: "car",
+    confidence_score: 0.92,
+    x_min: 96,
+    y_min: 54,
+    x_max: 960,
+    y_max: 540,
+    source: "original",
+  },
+  corrected_detection: {
+    detection_id: 11,
+    inference_run_id: 7,
+    frame_id: "frame-001",
+    class_name: "traffic_sign",
+    confidence_score: 0.92,
+    x_min: 0,
+    y_min: 40,
+    x_max: 1920,
+    y_max: 560,
+    source: "corrected",
+  },
+  effective_detection: {
+    detection_id: 11,
+    inference_run_id: 7,
+    frame_id: "frame-001",
+    class_name: "traffic_sign",
+    confidence_score: 0.92,
+    x_min: 0,
+    y_min: 40,
+    x_max: 1920,
+    y_max: 560,
+    source: "corrected",
+  },
+};

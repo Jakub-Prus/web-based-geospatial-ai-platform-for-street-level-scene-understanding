@@ -1,65 +1,31 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DetectionViewer } from "./DetectionViewer";
-import type {
-  DetectionRecord,
-  FrameDetailRecord,
-  InferenceRunRecord,
-} from "./types";
+import { sampleDetections, sampleFrame, sampleRun, sampleSavedCorrection } from "./test/fixtures";
 import { buildDetectionBoxLayout, buildViewerMessage } from "./viewer";
 
-const frame: FrameDetailRecord = {
-  frame_id: "frame-001",
-  dataset_id: 1,
-  image_path: "frames/frame-001.png",
-  latitude: 48.14542,
-  longitude: 11.56661,
-  heading_degrees: 92.5,
-  timestamp: "2026-03-20T10:15:00Z",
-  image_width: 1920,
-  image_height: 1080,
-  pitch_degrees: null,
-  roll_degrees: null,
-  camera_intrinsics_json: null,
-  sequence_id: "sequence-1",
-  depth_path: null,
-  preview_url: "/datasets/1/frames/frame-001/preview",
-};
+function createJsonResponse(payload: object, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => payload,
+  } as Response;
+}
 
-const run: InferenceRunRecord = {
-  id: 7,
-  dataset_id: 1,
-  run_type: "detection",
-  status: "completed",
-  model_name: "yolo11n",
-  model_path: "data/raw/models/yolo11n.pt",
-  frame_count: 2,
-  processed_frame_count: 2,
-  detection_count: 3,
-  error_message: null,
-  started_at: "2026-03-20T10:16:00Z",
-  completed_at: "2026-03-20T10:17:00Z",
-};
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn());
+});
 
-const detections: DetectionRecord[] = [
-  {
-    id: 11,
-    inference_run_id: 7,
-    frame_id: "frame-001",
-    class_name: "car",
-    confidence_score: 0.92,
-    x_min: 96,
-    y_min: 54,
-    x_max: 960,
-    y_max: 540,
-    created_at: "2026-03-20T10:17:00Z",
-  },
-];
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("buildDetectionBoxLayout", () => {
   it("converts stored pixel coordinates into percentage layout", () => {
-    const layout = buildDetectionBoxLayout(detections[0], frame);
+    const layout = buildDetectionBoxLayout(sampleDetections[0], sampleFrame);
 
     expect(layout.style.left).toBe("5%");
     expect(layout.style.top).toBe("5%");
@@ -79,7 +45,7 @@ describe("buildViewerMessage", () => {
 
   it("surfaces failed runs as an error state", () => {
     const failedRun = {
-      ...run,
+      ...sampleRun,
       status: "failed",
       error_message: "synthetic detector failure",
     };
@@ -95,12 +61,15 @@ describe("DetectionViewer", () => {
   it("renders stored boxes, labels, confidence, and run metadata", () => {
     render(
       <DetectionViewer
+        datasetId={1}
         datasetName="A2D2 demo"
-        frame={frame}
-        run={run}
-        detections={detections}
+        frame={sampleFrame}
+        run={sampleRun}
+        detections={sampleDetections}
+        corrections={[]}
         loading={false}
         error={null}
+        onCorrectionSaved={vi.fn()}
       />,
     );
 
@@ -112,20 +81,24 @@ describe("DetectionViewer", () => {
     expect(screen.getByText("yolo11n")).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Bounding boxes are rendered from stored pixel coordinates/i,
+        /Boxes stay in image pixel coordinates/i,
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Detection 1:\s*car/i)).toBeInTheDocument();
   });
 
   it("renders a readable empty state when a frame has no detections", () => {
     render(
       <DetectionViewer
+        datasetId={1}
         datasetName="A2D2 demo"
-        frame={frame}
-        run={{ ...run, status: "empty", detection_count: 0 }}
+        frame={sampleFrame}
+        run={{ ...sampleRun, status: "empty", detection_count: 0 }}
         detections={[]}
+        corrections={[]}
         loading={false}
         error={null}
+        onCorrectionSaved={vi.fn()}
       />,
     );
 
@@ -134,6 +107,64 @@ describe("DetectionViewer", () => {
       screen.getByText(
         "The latest stored run does not contain any bounding boxes for the selected image.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("lets a user relabel and save one detection", async () => {
+    const fetchMock = vi.fn(async () =>
+      createJsonResponse({ correction: sampleSavedCorrection }),
+    );
+    const onCorrectionSaved = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DetectionViewer
+        datasetId={1}
+        datasetName="A2D2 demo"
+        frame={sampleFrame}
+        run={sampleRun}
+        detections={sampleDetections}
+        corrections={[]}
+        loading={false}
+        error={null}
+        onCorrectionSaved={onCorrectionSaved}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Label"), {
+      target: { value: "traffic_sign" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    const requestArguments = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    const [requestUrl, requestInit] = requestArguments;
+    expect(String(requestUrl)).toContain(
+      "/datasets/1/frames/frame-001/detections/11/correction",
+    );
+    expect(requestInit.method).toBe("POST");
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      review_status: "pending",
+      corrected_detection: {
+        class_name: "traffic_sign",
+        x_min: 96,
+        y_min: 54,
+        x_max: 960,
+        y_max: 540,
+      },
+    });
+
+    await waitFor(() => {
+      expect(onCorrectionSaved).toHaveBeenCalledWith(sampleSavedCorrection);
+    });
+    expect(
+      await screen.findByText("Saved the updated annotation."),
     ).toBeInTheDocument();
   });
 });

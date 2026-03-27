@@ -1,6 +1,6 @@
 # 13. Implementation Roadmap
 
-Status: Updated after Slice 8
+Status: Updated after Slice 9
 
 ## Current Progress
 
@@ -15,10 +15,11 @@ Completed slices:
 - Slice 6: detection backend
 - Slice 7: detection overlay UI
 - Slice 8: correction persistence backend
+- Slice 9: annotation editing UI
 
 Next planned slice:
 
-- Slice 9: annotation editing UI
+- Slice 10: depth artifact backend
 
 ## Planning Assumptions
 
@@ -157,7 +158,7 @@ Day 2 scope is now effectively complete in the current repository state.
 - Invalid edits are rejected predictably
 
 Status note:
-The backend half of Day 3 is now complete through Slice 8. FastAPI persists one active correction per detection with separate original, corrected, and effective state handling. Direct annotation editing remains deferred to Slice 9.
+Day 3 annotation review is now implemented through Slice 9 for the focused MVP path. The frontend can select one existing detection, move or redraw the box, resize it, relabel it, clip the edit to image bounds, and save it through the Slice 8 correction endpoint while preserving the original detection state.
 
 ## Day 4: Depth, 3D, And Monitoring
 

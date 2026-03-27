@@ -78,6 +78,12 @@ const detectionPayload = {
   ],
 };
 
+const correctionsPayload = {
+  frame_id: "frame-001",
+  run: detectionPayload.run,
+  corrections: [],
+};
+
 function createJsonResponse(payload: object, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -124,6 +130,9 @@ describe("App", () => {
         "/datasets/1/frames/frame-001/detections": createJsonResponse(
           detectionPayload,
         ),
+        "/datasets/1/frames/frame-001/corrections": createJsonResponse(
+          correctionsPayload,
+        ),
       }),
     );
 
@@ -147,6 +156,10 @@ describe("App", () => {
         "/datasets/1/frames": createJsonResponse(frameListPayload),
         "/datasets/1/frames/frame-001": createJsonResponse(frameDetailPayload),
         "/datasets/1/frames/frame-001/detections": createJsonResponse(
+          { detail: "Not found" },
+          404,
+        ),
+        "/datasets/1/frames/frame-001/corrections": createJsonResponse(
           { detail: "Not found" },
           404,
         ),

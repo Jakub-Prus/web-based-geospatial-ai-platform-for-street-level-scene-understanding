@@ -1,6 +1,6 @@
 # 06. System Architecture
 
-Status: Updated after Slice 8
+Status: Updated after Slice 9
 
 ## High-Level Components
 
@@ -16,7 +16,7 @@ Status: Updated after Slice 8
 ### Frontend
 
 - Presents map and street-level viewer workflows
-- Renders overlays and annotation tools
+- Renders overlays and focused single-box annotation tools
 - Displays monitoring dashboards and job state
 - Renders point-cloud-style 3D output from depth-derived data
 
@@ -43,7 +43,7 @@ Status: Updated after Slice 8
 5. Detection and depth outputs are stored for map, image, and 3D rendering.
 6. Optional .NET bridge reads run metadata and exposes summary endpoints.
 7. Frontend retrieves map data, imagery references, detections, depth-derived geometry, and review state.
-8. User saves corrections through the FastAPI service.
+8. User selects one detection, edits or redraws the box inside the image bounds, and saves corrections through the FastAPI service.
 9. Monitoring views aggregate original output and correction outcomes.
 
 ## Current Persistence Note

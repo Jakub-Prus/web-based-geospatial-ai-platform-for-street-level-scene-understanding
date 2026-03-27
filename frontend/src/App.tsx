@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 
 import { DetectionViewer } from "./DetectionViewer";
 import type {
+  DetectionCorrectionRecord,
   DatasetListResponse,
   DatasetRecord,
   FrameDetectionsResponse,
+  FrameCorrectionsResponse,
   FrameDetailRecord,
   FrameDetailResponse,
   FrameListResponse,
@@ -14,6 +16,7 @@ import type {
 } from "./types";
 import {
   buildMarkerPositions,
+  buildCorrectionsPath,
   fetchJson,
   type ApiError,
 } from "./viewer";
@@ -32,11 +35,11 @@ function DatasetList({
   return (
     <section className="dataset-panel">
       <div className="section-header">
-        <p className="eyebrow">Slice 7</p>
-        <h1>Detection overlay workspace</h1>
+        <p className="eyebrow">Slice 9</p>
+        <h1>Detection editing workspace</h1>
         <p className="panel-copy">
           Choose a loaded dataset, inspect stored camera locations, and open a
-          frame viewer with persisted detection overlays and run status.
+          frame viewer where one persisted detection can be corrected at a time.
         </p>
       </div>
 
@@ -128,30 +131,39 @@ function SpatialMap({
 }
 
 type FramePreviewProps = {
+  datasetId: number | null;
   datasetName: string | null;
   selectedFrame: FrameDetailRecord | null;
   run: InferenceRunRecord | null;
   detections: DetectionRecord[];
+  corrections: DetectionCorrectionRecord[];
   loading: boolean;
   error: string | null;
+  onCorrectionSaved: (correction: DetectionCorrectionRecord) => void;
 };
 
 function FramePreview({
+  datasetId,
   datasetName,
   selectedFrame,
   run,
   detections,
+  corrections,
   loading,
   error,
+  onCorrectionSaved,
 }: FramePreviewProps): JSX.Element {
   return (
     <DetectionViewer
+      datasetId={datasetId}
       datasetName={datasetName}
       frame={selectedFrame}
       run={run}
       detections={detections}
+      corrections={corrections}
       loading={loading}
       error={error}
+      onCorrectionSaved={onCorrectionSaved}
     />
   );
 }
@@ -172,6 +184,9 @@ export default function App(): JSX.Element {
   const [detectionRun, setDetectionRun] = useState<InferenceRunRecord | null>(null);
   const [detectionsLoading, setDetectionsLoading] = useState(false);
   const [detectionsError, setDetectionsError] = useState<string | null>(null);
+  const [corrections, setCorrections] = useState<DetectionCorrectionRecord[]>([]);
+  const [correctionsLoading, setCorrectionsLoading] = useState(false);
+  const [correctionsError, setCorrectionsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -224,6 +239,9 @@ export default function App(): JSX.Element {
       setDetectionRun(null);
       setDetections([]);
       setDetectionsError(null);
+      setCorrections([]);
+      setCorrectionsLoading(false);
+      setCorrectionsError(null);
       return;
     }
 
@@ -238,6 +256,8 @@ export default function App(): JSX.Element {
       setDetectionRun(null);
       setDetections([]);
       setDetectionsError(null);
+      setCorrections([]);
+      setCorrectionsError(null);
 
       try {
         const payload = await fetchJson<FrameListResponse>(
@@ -281,6 +301,9 @@ export default function App(): JSX.Element {
       setDetectionRun(null);
       setDetectionsLoading(false);
       setDetectionsError(null);
+      setCorrections([]);
+      setCorrectionsLoading(false);
+      setCorrectionsError(null);
       return;
     }
 
@@ -384,6 +407,72 @@ export default function App(): JSX.Element {
     };
   }, [selectedDatasetId, selectedFrameId]);
 
+  useEffect(() => {
+    if (selectedDatasetId === null || selectedFrameId === null) {
+      setCorrections([]);
+      setCorrectionsLoading(false);
+      setCorrectionsError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const datasetId = selectedDatasetId;
+    const frameId = selectedFrameId;
+
+    async function loadCorrections() {
+      setCorrectionsLoading(true);
+      setCorrectionsError(null);
+
+      try {
+        const payload = await fetchJson<FrameCorrectionsResponse>(
+          buildCorrectionsPath(datasetId, frameId),
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCorrections(payload.corrections);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        const apiError = error as Partial<ApiError>;
+        setCorrections([]);
+
+        if (apiError.status === 404) {
+          setCorrectionsError(null);
+          return;
+        }
+
+        setCorrectionsError(
+          "Unable to load saved correction state for the selected frame.",
+        );
+      } finally {
+        if (isMounted) {
+          setCorrectionsLoading(false);
+        }
+      }
+    }
+
+    void loadCorrections();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDatasetId, selectedFrameId]);
+
+  function handleCorrectionSaved(correction: DetectionCorrectionRecord) {
+    setCorrections((currentCorrections) => {
+      const remainingCorrections = currentCorrections.filter(
+        (currentCorrection) => currentCorrection.detection_id !== correction.detection_id,
+      );
+
+      return [...remainingCorrections, correction];
+    });
+  }
+
   return (
     <main className="app-shell">
       <DatasetList
@@ -406,12 +495,15 @@ export default function App(): JSX.Element {
           onSelectFrame={setSelectedFrameId}
         />
         <FramePreview
+          datasetId={selectedDatasetId}
           datasetName={selectedDataset?.name ?? null}
           selectedFrame={selectedFrame}
           run={detectionRun}
           detections={detections}
-          loading={frameLoading || detectionsLoading}
-          error={frameError ?? detectionsError}
+          corrections={corrections}
+          loading={frameLoading || detectionsLoading || correctionsLoading}
+          error={frameError ?? detectionsError ?? correctionsError}
+          onCorrectionSaved={handleCorrectionSaved}
         />
       </section>
 

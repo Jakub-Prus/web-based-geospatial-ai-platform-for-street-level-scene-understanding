@@ -75,3 +75,52 @@ export type FrameDetectionsResponse = {
   run: InferenceRunRecord;
   detections: DetectionRecord[];
 };
+
+export type ReviewStatus = "pending" | "approved" | "rejected";
+
+export type DetectionStateSource = "original" | "corrected";
+
+export type DetectionStateRecord = {
+  detection_id: number;
+  inference_run_id: number;
+  frame_id: string;
+  class_name: string;
+  confidence_score: number;
+  x_min: number;
+  y_min: number;
+  x_max: number;
+  y_max: number;
+  source: DetectionStateSource;
+};
+
+export type DetectionCorrectionRecord = {
+  id: number;
+  detection_id: number;
+  review_status: ReviewStatus;
+  created_at: string;
+  updated_at: string;
+  original_detection: DetectionStateRecord;
+  corrected_detection: DetectionStateRecord | null;
+  effective_detection: DetectionStateRecord | null;
+};
+
+export type FrameCorrectionsResponse = {
+  frame_id: string;
+  run: InferenceRunRecord;
+  corrections: DetectionCorrectionRecord[];
+};
+
+export type SaveCorrectionRequest = {
+  review_status: ReviewStatus;
+  corrected_detection: {
+    class_name: string;
+    x_min: number;
+    y_min: number;
+    x_max: number;
+    y_max: number;
+  };
+};
+
+export type DetectionCorrectionResponse = {
+  correction: DetectionCorrectionRecord;
+};

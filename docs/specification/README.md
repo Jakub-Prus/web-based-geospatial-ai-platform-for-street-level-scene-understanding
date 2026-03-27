@@ -13,16 +13,17 @@ The plan is intentionally aligned to the Cyclomedia Full Stack Developer: Geospa
 
 ## Current Build State
 
-Implementation is currently complete through Slice 8:
+Implementation is currently complete through Slice 9:
 
 - dataset loading and validation
 - spatial browsing with stored camera markers
 - .NET dataset summary bridge
 - persisted detection runs
-- read-only detection overlay rendering in the frontend viewer
+- correction-aware detection overlay rendering in the frontend viewer
 - backend correction persistence with review status and original-versus-corrected state handling
+- single-detection annotation editing with move, resize, redraw, relabel, and bounds clipping
 
-Annotation editing, depth, point-cloud generation, metrics, and export remain planned slices.
+Depth, point-cloud generation, metrics, and export remain planned slices.
 
 ## Recommended Reading Order
 
