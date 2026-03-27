@@ -783,6 +783,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 8 only.
+Create new branch.
 Implement correction persistence on the backend.
 Add:
 - correction model
@@ -800,6 +801,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 9 only.
+Create new branch.
 Add frontend annotation editing for existing detections.
 Implement:
 - select detection
@@ -818,6 +820,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 10 only.
+Create new branch.
 Read docs/specification/15-scene-geometry-contract.md first.
 Use data/raw/models/dpt_swin2_tiny_256.pt.
 Implement:
@@ -835,6 +838,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 11 only.
+Create new branch.
 Read docs/specification/15-scene-geometry-contract.md first.
 Implement point-cloud conversion from stored depth:
 - pixel-to-3D conversion
@@ -851,6 +855,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 12 only.
+Create new branch.
 Build the Three.js viewer for an existing point-cloud artifact.
 Implement:
 - Three.js scene
@@ -868,6 +873,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 13 only.
+Create new branch.
 Add minimal monitoring metrics based on real stored data.
 Implement:
 - detection count
@@ -885,6 +891,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 14 only.
+Create new branch.
 Add corrected-output export.
 Implement:
 - export endpoint
@@ -900,6 +907,7 @@ Verify test coverage and commit and push.
 
 ```text
 Follow docs/specification/18-codex-implementation-slices.md and implement Slice 15 only.
+Create new branch.
 Harden the demo and documentation.
 Implement:
 - failure-state UI
