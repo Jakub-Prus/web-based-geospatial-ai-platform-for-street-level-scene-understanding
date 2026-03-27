@@ -4,6 +4,8 @@ import { DetectionViewer } from "./DetectionViewer";
 import type {
   DetectionCorrectionRecord,
   DatasetListResponse,
+  DatasetMetricsRecord,
+  DatasetMetricsResponse,
   DatasetRecord,
   FrameDetectionsResponse,
   FrameCorrectionsResponse,
@@ -17,7 +19,9 @@ import type {
 import {
   buildMarkerPositions,
   buildCorrectionsPath,
+  buildDatasetMetricsPath,
   fetchJson,
+  formatPercentage,
   type ApiError,
 } from "./viewer";
 
@@ -35,12 +39,13 @@ function DatasetList({
   return (
     <section className="dataset-panel">
       <div className="section-header">
-        <p className="eyebrow">Slice 12</p>
+        <p className="eyebrow">Slice 13</p>
         <h1>Frame review workspace</h1>
         <p className="panel-copy">
           Choose a loaded dataset, inspect stored camera locations, and open a
-          frame viewer where stored detections and one persisted point-cloud
-          artifact can be inspected together.
+          frame viewer where stored detections, persisted corrections, a summary
+          monitoring panel, and one stored point-cloud artifact can be inspected
+          together.
         </p>
       </div>
 
@@ -75,6 +80,94 @@ type SpatialMapProps = {
   selectedFrameId: string | null;
   onSelectFrame: (frameId: string) => void;
 };
+
+type MonitoringSummaryProps = {
+  dataset: DatasetRecord | null;
+  metrics: DatasetMetricsRecord | null;
+  run: InferenceRunRecord | null;
+  loading: boolean;
+  error: string | null;
+};
+
+function formatMetricCount(value: number): string {
+  return new Intl.NumberFormat().format(value);
+}
+
+function formatAverageConfidence(value: number | null): string {
+  return value === null ? "No detections" : formatPercentage(value);
+}
+
+function MonitoringSummary({
+  dataset,
+  metrics,
+  run,
+  loading,
+  error,
+}: MonitoringSummaryProps): JSX.Element | null {
+  if (dataset === null) {
+    return null;
+  }
+
+  const hasRun = run !== null;
+  const metricCards = [
+    {
+      label: "Detection count",
+      value: formatMetricCount(metrics?.detection_count ?? 0),
+      description: "Stored detections in the latest dataset run.",
+    },
+    {
+      label: "Average confidence",
+      value: formatAverageConfidence(metrics?.average_confidence_score ?? null),
+      description: "Mean model confidence across the latest stored detections.",
+    },
+    {
+      label: "Correction count",
+      value: formatMetricCount(metrics?.correction_count ?? 0),
+      description: "Persisted reviewer corrections tied to that latest run.",
+    },
+    {
+      label: "Correction rate",
+      value: formatPercentage(metrics?.correction_rate ?? 0),
+      description: "Share of stored detections with a persisted correction.",
+    },
+  ];
+
+  return (
+    <section className="workspace-panel metrics-panel" aria-label="Monitoring summary">
+      <div className="section-header section-header--row">
+        <div>
+          <p className="eyebrow">Slice 13</p>
+          <h2>Monitoring summary</h2>
+          <p className="panel-copy">
+            Minimal dataset monitoring sourced from the latest stored detection run
+            and its persisted correction records.
+          </p>
+        </div>
+        <span className="stat-pill">
+          {hasRun ? `${run.status} run #${run.id}` : "No detection run yet"}
+        </span>
+      </div>
+
+      <div className="metrics-grid">
+        {metricCards.map((metricCard) => (
+          <article key={metricCard.label} className="metric-card">
+            <p className="metric-card__label">{metricCard.label}</p>
+            <strong className="metric-card__value">{metricCard.value}</strong>
+            <p className="metric-card__description">{metricCard.description}</p>
+          </article>
+        ))}
+      </div>
+
+      {loading ? <p className="status-message">Loading monitoring metrics...</p> : null}
+      {!loading && !error && !hasRun ? (
+        <p className="status-message">
+          Run detection for this dataset to populate monitoring metrics.
+        </p>
+      ) : null}
+      {error ? <p className="status-message status-message--error">{error}</p> : null}
+    </section>
+  );
+}
 
 function SpatialMap({
   frames,
@@ -174,6 +267,11 @@ export default function App(): JSX.Element {
   const [datasetError, setDatasetError] = useState<string | null>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null);
   const [selectedDataset, setSelectedDataset] = useState<DatasetRecord | null>(null);
+  const [datasetMetrics, setDatasetMetrics] = useState<DatasetMetricsRecord | null>(null);
+  const [metricsRun, setMetricsRun] = useState<InferenceRunRecord | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+  const [metricsRefreshCount, setMetricsRefreshCount] = useState(0);
   const [frames, setFrames] = useState<FrameRecord[]>([]);
   const [framesLoading, setFramesLoading] = useState(false);
   const [framesError, setFramesError] = useState<string | null>(null);
@@ -233,7 +331,60 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     if (selectedDatasetId === null) {
+      setDatasetMetrics(null);
+      setMetricsRun(null);
+      setMetricsLoading(false);
+      setMetricsError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const datasetId = selectedDatasetId;
+
+    async function loadDatasetMetrics() {
+      setMetricsLoading(true);
+      setMetricsError(null);
+
+      try {
+        const payload = await fetchJson<DatasetMetricsResponse>(
+          buildDatasetMetricsPath(datasetId),
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setDatasetMetrics(payload.metrics);
+        setMetricsRun(payload.run);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setDatasetMetrics(null);
+        setMetricsRun(null);
+        setMetricsError("Unable to load monitoring metrics for the selected dataset.");
+      } finally {
+        if (isMounted) {
+          setMetricsLoading(false);
+        }
+      }
+    }
+
+    void loadDatasetMetrics();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDatasetId, metricsRefreshCount]);
+
+  useEffect(() => {
+    if (selectedDatasetId === null) {
       setSelectedDataset(null);
+      setDatasetMetrics(null);
+      setMetricsRun(null);
+      setMetricsLoading(false);
+      setMetricsError(null);
       setFrames([]);
       setSelectedFrameId(null);
       setSelectedFrame(null);
@@ -472,6 +623,7 @@ export default function App(): JSX.Element {
 
       return [...remainingCorrections, correction];
     });
+    setMetricsRefreshCount((currentCount) => currentCount + 1);
   }
 
   return (
@@ -488,6 +640,14 @@ export default function App(): JSX.Element {
           No datasets are loaded yet. Run the Slice 3 loader endpoint first.
         </p>
       ) : null}
+
+      <MonitoringSummary
+        dataset={selectedDataset}
+        metrics={datasetMetrics}
+        run={metricsRun}
+        loading={metricsLoading}
+        error={metricsError}
+      />
 
       <section className="workspace-grid">
         <SpatialMap

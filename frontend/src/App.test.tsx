@@ -47,6 +47,30 @@ const frameListPayload = {
   ],
 };
 
+const metricsPayload = {
+  dataset_id: 1,
+  run: {
+    id: 7,
+    dataset_id: 1,
+    run_type: "detection",
+    status: "completed",
+    model_name: "yolo11n",
+    model_path: "data/raw/models/yolo11n.pt",
+    frame_count: 1,
+    processed_frame_count: 1,
+    detection_count: 1,
+    error_message: null,
+    started_at: "2026-03-20T10:16:00Z",
+    completed_at: "2026-03-20T10:17:00Z",
+  },
+  metrics: {
+    detection_count: 1,
+    average_confidence_score: 0.92,
+    correction_count: 0,
+    correction_rate: 0,
+  },
+};
+
 const frameDetailPayload = {
   frame: {
     ...frameListPayload.frames[0],
@@ -179,6 +203,7 @@ describe("App", () => {
       "fetch",
       mockFetch({
         "/datasets": createJsonResponse(datasetListPayload),
+        "/datasets/1/metrics": createJsonResponse(metricsPayload),
         "/datasets/1/frames": createJsonResponse(frameListPayload),
         "/datasets/1/frames/frame-001": createJsonResponse(frameDetailPayload),
         "/datasets/1/frames/frame-001/detections": createJsonResponse(
@@ -202,6 +227,10 @@ describe("App", () => {
 
     expect(await screen.findByText("car 92%")).toBeInTheDocument();
     expect(screen.getByText("Stored detection run")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Monitoring summary" })).toBeInTheDocument();
+    expect(screen.getByText("Detection count")).toBeInTheDocument();
+    expect(screen.getByText("Average confidence")).toBeInTheDocument();
+    expect(screen.getAllByText("92%").length).toBeGreaterThan(0);
     expect(await screen.findByText("3D point cloud")).toBeInTheDocument();
     expect(screen.getByText("Rendered points")).toBeInTheDocument();
     expect(screen.getAllByText("A2D2 demo")).toHaveLength(2);
@@ -212,6 +241,16 @@ describe("App", () => {
       "fetch",
       mockFetch({
         "/datasets": createJsonResponse(datasetListPayload),
+        "/datasets/1/metrics": createJsonResponse({
+          dataset_id: 1,
+          run: null,
+          metrics: {
+            detection_count: 0,
+            average_confidence_score: null,
+            correction_count: 0,
+            correction_rate: 0,
+          },
+        }),
         "/datasets/1/frames": createJsonResponse(frameListPayload),
         "/datasets/1/frames/frame-001": createJsonResponse(frameDetailPayload),
         "/datasets/1/frames/frame-001/detections": createJsonResponse(
@@ -241,6 +280,9 @@ describe("App", () => {
     fireEvent.click(markerButton);
 
     expect(await screen.findByText("No detection run yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Run detection for this dataset to populate monitoring metrics/i),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         /Run Slice 6 detection for this dataset before expecting overlay output/i,

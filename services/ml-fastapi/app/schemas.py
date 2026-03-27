@@ -169,6 +169,19 @@ class InferenceRunRecord(BaseModel):
     completed_at: str | None = None
 
 
+class DatasetMetricsRecord(BaseModel):
+    detection_count: int
+    average_confidence_score: float | None = None
+    correction_count: int
+    correction_rate: float
+
+
+class DatasetMetricsResponse(BaseModel):
+    dataset_id: int
+    run: InferenceRunRecord | None = None
+    metrics: DatasetMetricsRecord
+
+
 class DetectionRunResponse(BaseModel):
     run: InferenceRunRecord
 

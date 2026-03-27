@@ -1,6 +1,6 @@
 # 13. Implementation Roadmap
 
-Status: Updated after Slice 11
+Status: Updated after Slice 13
 
 ## Current Progress
 
@@ -18,10 +18,12 @@ Completed slices:
 - Slice 9: annotation editing UI
 - Slice 10: depth artifact backend
 - Slice 11: point-cloud conversion
+- Slice 12: Three.js viewer
+- Slice 13: metrics
 
 Next planned slice:
 
-- Slice 12: Three.js viewer
+- Slice 14: export
 
 ## Planning Assumptions
 
@@ -191,7 +193,7 @@ Day 3 annotation review is now implemented through Slice 9 for the focused MVP p
 - The point-cloud output is visually coherent and stable for the demo dataset
 
 Status note:
-Day 4 is now partially complete in the current repository state. Slices 10 and 11 persist one validated depth artifact per selected frame and one deterministic sampled point-cloud payload per selected frame with clear missing and failed fallback states; Three.js rendering and monitoring remain for the next slices.
+Day 4 is now complete for the focused MVP path in the current repository state. Slices 10 through 13 persist one validated depth artifact per selected frame, one deterministic sampled point-cloud payload per selected frame, a selected-frame Three.js viewer, and a dataset-level monitoring summary sourced from the latest stored detection run plus persisted correction records.
 
 ## Day 5: Export, Failure Handling, And Demo Polish
 

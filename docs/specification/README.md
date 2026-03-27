@@ -13,7 +13,7 @@ The plan is intentionally aligned to the Cyclomedia Full Stack Developer: Geospa
 
 ## Current Build State
 
-Implementation is currently complete through Slice 12:
+Implementation is currently complete through Slice 13:
 
 - dataset loading and validation
 - spatial browsing with stored camera markers
@@ -25,8 +25,9 @@ Implementation is currently complete through Slice 12:
 - persisted MiDaS depth artifacts with explicit missing and failed fallback states
 - persisted point-cloud artifacts generated from stored depth with a documented local camera coordinate system and deterministic subsampling
 - a selected-frame Three.js point-cloud viewer with orbit controls plus loading, missing, running, and failed 3D states
+- a dataset-level monitoring summary driven by the latest stored detection run and its persisted correction records
 
-Metrics and export remain planned slices.
+Export remains the next planned slice.
 
 ## Recommended Reading Order
 
@@ -45,7 +46,7 @@ Metrics and export remain planned slices.
 
 ## MVP Summary
 
-The MVP is a full stack platform where a user uploads geo-tagged street imagery, triggers ML inference, reviews detections in a map-plus-image interface, edits incorrect labels or boxes, and monitors output quality through dashboards.
+The MVP is a full stack platform where a user uploads geo-tagged street imagery, triggers ML inference, reviews detections in a map-plus-image interface, edits incorrect labels or boxes, and monitors output quality through a lightweight dashboard summary.
 
 ## Delivery Planning
 

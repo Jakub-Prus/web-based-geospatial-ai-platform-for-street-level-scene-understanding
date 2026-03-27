@@ -66,6 +66,11 @@ button {
   grid-template-columns: minmax(0, 1.2fr) minmax(20rem, 0.8fr);
 }
 
+.metrics-panel {
+  display: grid;
+  gap: 1rem;
+}
+
 .section-header {
   margin-bottom: 1.25rem;
 }
@@ -165,6 +170,48 @@ h2 {
   color: var(--accent-strong);
   font-size: 0.85rem;
   font-weight: 700;
+}
+
+.metrics-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.metric-card {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 9.5rem;
+  padding: 1rem;
+  border: 1px solid rgba(22, 35, 31, 0.08);
+  border-radius: 1.15rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 245, 242, 0.98)),
+    radial-gradient(circle at top right, rgba(18, 108, 101, 0.08), transparent 42%);
+}
+
+.metric-card__label,
+.metric-card__description {
+  margin: 0;
+}
+
+.metric-card__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(22, 35, 31, 0.64);
+}
+
+.metric-card__value {
+  font-size: clamp(1.75rem, 3vw, 2.6rem);
+  line-height: 1;
+  color: var(--accent-strong);
+}
+
+.metric-card__description {
+  color: rgba(22, 35, 31, 0.72);
+  line-height: 1.5;
 }
 
 .map-panel,

@@ -150,8 +150,12 @@ export function formatHeading(value: number): string {
   return `${value.toFixed(HEADING_PRECISION)} degrees`;
 }
 
-export function formatConfidence(value: number): string {
+export function formatPercentage(value: number): string {
   return `${Math.round(value * CONFIDENCE_PERCENTAGE_SCALE)}%`;
+}
+
+export function formatConfidence(value: number): string {
+  return formatPercentage(value);
 }
 
 export function buildMarkerPositions(frames: FrameRecord[]): MarkerPosition[] {
@@ -253,6 +257,10 @@ export function buildCorrectionSavePath(
 
 export function buildCorrectionsPath(datasetId: number, frameId: string): string {
   return `/datasets/${datasetId}/frames/${frameId}/corrections`;
+}
+
+export function buildDatasetMetricsPath(datasetId: number): string {
+  return `/datasets/${datasetId}/metrics`;
 }
 
 export function buildPointCloudPath(datasetId: number, frameId: string): string {

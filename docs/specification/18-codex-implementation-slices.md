@@ -1,6 +1,6 @@
 # 18. Codex Implementation Slices
 
-Status: Active implementation plan, updated after Slice 12
+Status: Active implementation plan, updated after Slice 13
 
 ## Purpose
 
@@ -551,6 +551,8 @@ Current result:
 
 ## Slice 13: Metrics
 
+Status: Implemented
+
 ### Goal
 
 Show minimal monitoring that reflects real system activity.
@@ -580,6 +582,14 @@ Show minimal monitoring that reflects real system activity.
 ### Stop Condition
 
 - The dashboard reflects real processed and corrected data.
+
+Current result:
+
+- FastAPI now exposes `GET /datasets/{dataset_id}/metrics` for a minimal monitoring summary based on the latest stored detection run for the selected dataset.
+- The summary reports detection count, average confidence, correction count, and correction rate from persisted `detections` and `corrections` rows without adding time-series storage or model comparison.
+- The frontend review workspace now renders those four summary metrics above the existing map and frame-review panels.
+- Saving a correction in the existing annotation editor triggers a fresh metrics fetch so the summary reflects persisted review activity immediately.
+- Verified Slice 13 stop condition: an isolated FastAPI verification run loaded `data/raw/a2d2-subset/`, returned zeroed metrics before detection, returned non-zero detection metrics after a real run, and then showed increased correction count plus correction rate after a persisted correction save.
 
 ## Slice 14: Export
 

@@ -1,8 +1,8 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 12 Three.js viewer workspace for the planned geospatial AI demo platform.
+Slice 13 monitoring workspace for the planned geospatial AI demo platform.
 
-Slices `0` through `12` are now implemented:
+Slices `0` through `13` are now implemented:
 
 - dataset contract and geometry contract are frozen
 - React, FastAPI, and .NET service skeletons are in place
@@ -16,6 +16,7 @@ Slices `0` through `12` are now implemented:
 - one selected frame can now produce a persisted depth artifact with validated source-image dimensions and clear missing-depth fallback state
 - one selected frame can now return a stable stored point-cloud payload in a documented local camera coordinate system
 - one selected frame can now render its stored point-cloud artifact in an interactive Three.js viewer with orbit controls plus loading, missing, and failed 3D states
+- one selected dataset can now surface live monitoring summary metrics from stored detections and persisted corrections
 
 ## Specification Docs
 
@@ -164,6 +165,12 @@ Check the current point-cloud state and inline payload for a frame:
 
 ```bash
 curl http://localhost:8000/datasets/{dataset_id}/frames/{frame_id}/point-cloud
+```
+
+Check the current Slice 13 monitoring summary for the latest stored detection run:
+
+```bash
+curl http://localhost:8000/datasets/{dataset_id}/metrics
 ```
 
 ### 5. Run services outside Docker
@@ -368,6 +375,20 @@ The viewer now supports:
 - readable empty, missing, running, and failed 3D states without breaking the 2D review flow
 - artifact metadata for rendered point count, source point count, subsample step, coordinate system, and intrinsics source
 
+## Slice 13 Monitoring Summary
+
+The review workspace now includes one dataset-level monitoring panel sourced from stored backend data.
+
+Slice 13 adds:
+
+- `GET /datasets/{dataset_id}/metrics`
+- detection count from the latest stored detection run
+- average confidence across that latest run's persisted detections
+- correction count for persisted correction rows tied to that same run
+- correction rate computed as `correction_count / detection_count`
+
+The frontend fetches those values when a dataset is selected and refreshes the summary again after a correction save so the dashboard reflects persisted review activity without adding time-series charts or model-comparison UI.
+
 ## Local Verification
 
 Frontend checks:
@@ -379,7 +400,7 @@ npm test
 npm run build
 ```
 
-Frontend coverage currently runs through Vitest with V8 coverage and passes at `76.38%` total coverage while exercising dataset selection, correction-aware overlay rendering, point-cloud fetch and state handling, Three.js scene setup through mocked canvas tests, annotation geometry helpers, and correction-save behavior.
+Frontend coverage currently runs through Vitest with V8 coverage and passes at `76.88%` total coverage while exercising dataset selection, monitoring-summary rendering, correction-aware overlay rendering, point-cloud fetch and state handling, Three.js scene setup through mocked canvas tests, annotation geometry helpers, and correction-save behavior.
 
 FastAPI checks:
 
@@ -424,5 +445,16 @@ Slice 12 real-asset verification:
 - source valid depth pixels: `1,938,775`
 - coordinate system: `camera_local_right_handed_x_right_y_up_z_forward`
 - frontend verification path: selected-frame point-cloud fetch plus Three.js canvas tests with control initialization and cleanup coverage
+
+Slice 13 real-asset verification:
+
+- isolated database: `services/ml-fastapi/data/slice13-verify.db`
+- dataset: `data/raw/a2d2-subset/`
+- model: `data/raw/models/yolo11n.pt`
+- verified frame: `20190401121727_camera_frontright_000013460`
+- metrics before run: `0` detections, `null` average confidence, `0` corrections, `0.0` correction rate
+- metrics after run: `532` detections, `0.37677917265354244` average confidence, `0` corrections, `0.0` correction rate
+- metrics after persisted correction: `532` detections, `0.37677917265354244` average confidence, `1` correction, `0.0018796992481203006` correction rate
+- result: the monitoring summary changed after a real detection run and changed again after a persisted correction save against that stored run data
 
 .NET bridge tests require a local `.NET` SDK, not just the runtime. In the current environment `dotnet.exe` is present, but `dotnet --list-sdks` returns no installed SDKs.

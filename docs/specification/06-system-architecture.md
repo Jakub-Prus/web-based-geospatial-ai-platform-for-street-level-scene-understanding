@@ -1,6 +1,6 @@
 # 06. System Architecture
 
-Status: Updated after Slice 12
+Status: Updated after Slice 13
 
 ## High-Level Components
 
@@ -30,6 +30,7 @@ Status: Updated after Slice 12
 - Persists review corrections separately from raw model detections
 - Persists one validated local depth artifact per selected frame for later 3D slices
 - Converts stored depth artifacts into persisted local point-cloud payloads for later Three.js rendering
+- Aggregates dataset monitoring summaries from the latest stored detection run and its persisted corrections
 
 ### .NET Bridge Service
 
@@ -48,7 +49,8 @@ Status: Updated after Slice 12
 7. Frontend retrieves map data, imagery references, detections, point-cloud payloads, and review state.
 8. User selects one frame, inspects both 2D detections and the local 3D point cloud, then edits or redraws one box inside the image bounds when needed.
 9. FastAPI serves the stored point-cloud payload while the frontend renders it with local camera-space controls and fallback states.
-10. Monitoring views aggregate original output and correction outcomes.
+10. FastAPI aggregates monitoring metrics from the latest stored detection run and its persisted correction records for the selected dataset.
+11. The frontend renders those summary values alongside the review workspace without introducing time-series storage yet.
 
 ## Current Persistence Note
 

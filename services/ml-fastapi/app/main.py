@@ -64,6 +64,8 @@ from app.schemas import (
     DatasetListResponse,
     DatasetLoadRequest,
     DatasetLoadResponse,
+    DatasetMetricsRecord,
+    DatasetMetricsResponse,
     DatasetRecord,
     DetectionCorrectionRecord,
     DetectionCorrectionResponse,
@@ -92,6 +94,7 @@ SERVICE_STATUS = "ok"
 SERVICE_VERSION = "0.1.0"
 DEFAULT_DATASET_NAME = "a2d2-subset"
 MINIMUM_IMAGE_COORDINATE = 0.0
+ZERO_CORRECTION_RATE = 0.0
 DEFAULT_ALLOWED_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -339,6 +342,49 @@ def build_correction_response_record(
         original_detection=original_detection,
         corrected_detection=corrected_detection,
         effective_detection=effective_detection,
+    )
+
+
+def build_dataset_metrics_response(
+    *,
+    dataset_id: int,
+    run_record: dict[str, object] | None,
+    metrics_record: dict[str, object] | None,
+) -> DatasetMetricsResponse:
+    detection_count = (
+        int(metrics_record["detection_count"])
+        if metrics_record is not None
+        else 0
+    )
+    correction_count = (
+        int(metrics_record["correction_count"])
+        if metrics_record is not None
+        else 0
+    )
+    average_confidence_score = (
+        None
+        if metrics_record is None or metrics_record["average_confidence_score"] is None
+        else float(metrics_record["average_confidence_score"])
+    )
+    correction_rate = (
+        correction_count / detection_count
+        if detection_count > 0
+        else ZERO_CORRECTION_RATE
+    )
+
+    return DatasetMetricsResponse(
+        dataset_id=dataset_id,
+        run=(
+            InferenceRunRecord.model_validate(run_record)
+            if run_record is not None
+            else None
+        ),
+        metrics=DatasetMetricsRecord(
+            detection_count=detection_count,
+            average_confidence_score=average_confidence_score,
+            correction_count=correction_count,
+            correction_rate=correction_rate,
+        ),
     )
 
 
@@ -604,6 +650,44 @@ def create_app(
 
         return DatasetListResponse(
             datasets=[DatasetRecord.model_validate(record) for record in dataset_records]
+        )
+
+    @app.get(
+        "/datasets/{dataset_id}/metrics",
+        response_model=DatasetMetricsResponse,
+        status_code=HTTPStatus.OK,
+    )
+    async def get_dataset_metrics(dataset_id: int) -> DatasetMetricsResponse:
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                repository.get_dataset(dataset_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Dataset {dataset_id} was not found.",
+                ) from error
+
+            try:
+                run_record = repository.get_latest_detection_run_for_dataset(
+                    dataset_id,
+                    DETECTION_RUN_TYPE,
+                )
+            except KeyError:
+                return build_dataset_metrics_response(
+                    dataset_id=dataset_id,
+                    run_record=None,
+                    metrics_record=None,
+                )
+
+            metrics_record = repository.summarize_detection_metrics_for_run(
+                int(run_record["id"])
+            )
+
+        return build_dataset_metrics_response(
+            dataset_id=dataset_id,
+            run_record=run_record,
+            metrics_record=metrics_record,
         )
 
     @app.get(

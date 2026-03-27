@@ -223,6 +223,38 @@ class DatasetRepository:
 
         return dict(row)
 
+    def summarize_detection_metrics_for_run(
+        self,
+        run_id: int,
+    ) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                (
+                    SELECT COUNT(*)
+                    FROM {DETECTIONS_TABLE_NAME}
+                    WHERE inference_run_id = ?
+                ) AS detection_count,
+                (
+                    SELECT AVG(confidence_score)
+                    FROM {DETECTIONS_TABLE_NAME}
+                    WHERE inference_run_id = ?
+                ) AS average_confidence_score,
+                (
+                    SELECT COUNT(*)
+                    FROM {CORRECTIONS_TABLE_NAME} AS corrections
+                    INNER JOIN {DETECTIONS_TABLE_NAME} AS detections
+                        ON detections.id = corrections.detection_id
+                    WHERE detections.inference_run_id = ?
+                ) AS correction_count
+            """,
+            (run_id, run_id, run_id),
+        ).fetchone()
+        if row is None:
+            raise KeyError(run_id)
+
+        return dict(row)
+
     def get_latest_inference_run_for_frame(
         self,
         dataset_id: int,

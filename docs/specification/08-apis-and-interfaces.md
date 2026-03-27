@@ -1,6 +1,6 @@
 # 08. APIs And Interfaces
 
-Status: Updated for implemented Slices 3-11
+Status: Updated for implemented Slices 3-13
 
 ## FastAPI Surface Implemented Today
 
@@ -13,9 +13,12 @@ Status: Updated for implemented Slices 3-11
 
 - `POST /datasets/load`
 - `GET /datasets`
+- `GET /datasets/{dataset_id}/metrics`
 - `GET /datasets/{dataset_id}/frames`
 - `GET /datasets/{dataset_id}/frames/{frame_id}`
 - `GET /datasets/{dataset_id}/frames/{frame_id}/preview`
+
+The dataset-metrics endpoint returns summary monitoring values from the latest stored detection run for the dataset: detection count, average confidence, correction count, and correction rate. If the dataset has no stored detection run yet, the endpoint returns a zeroed metric payload with `run: null`.
 
 ### Detection Run Endpoints
 
@@ -66,7 +69,6 @@ The bridge remains intentionally small in Slice 5:
 
 These interfaces remain planned but are not implemented yet:
 
-- metrics endpoints
 - export endpoints
 
 ## Interface Contract Principles
@@ -93,7 +95,8 @@ These interfaces remain planned but are not implemented yet:
 8. Frontend posts the updated label and bounding box to `POST /datasets/{dataset_id}/frames/{frame_id}/detections/{detection_id}/correction`.
 9. Frontend or a script can trigger `POST /datasets/{dataset_id}/frames/{frame_id}/depth` for one selected frame and read the current depth state through `GET /datasets/{dataset_id}/frames/{frame_id}/depth`.
 10. Frontend or a script can trigger `POST /datasets/{dataset_id}/frames/{frame_id}/point-cloud` and read the latest inline XYZ payload through `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud`.
-11. Future slices add Three.js rendering, metrics, and export.
+11. Frontend requests `GET /datasets/{dataset_id}/metrics` to populate the monitoring summary for the latest stored detection run and its persisted corrections.
+12. Future slices add export.
 
 ## Required Payload Contracts
 
@@ -101,6 +104,7 @@ These interfaces remain planned but are not implemented yet:
 - Detection records include frame id, class label, confidence, and bounding box in image pixel space.
 - Bounding boxes remain in `x_min`, `y_min`, `x_max`, `y_max` image coordinates until the frontend scales them for display.
 - Correction records include review status plus separate original, corrected, and effective detection state.
+- Dataset metrics expose `detection_count`, `average_confidence_score`, `correction_count`, and `correction_rate` for the latest stored detection run without introducing time-series history yet.
 - Depth artifact records include `depth_uri`, `width`, `height`, `depth_format`, and `depth_scale`, and the backend rejects artifacts whose stored shape does not match the source frame dimensions.
 - Point-cloud artifact records include `point_cloud_uri`, `point_format`, `coordinate_system`, `source_point_count`, `point_count`, `subsample_step`, and the exact `fx`, `fy`, `cx`, and `cy` values used for generation.
 

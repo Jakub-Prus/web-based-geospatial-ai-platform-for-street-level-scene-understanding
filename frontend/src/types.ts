@@ -33,6 +33,19 @@ export type DatasetListResponse = {
   datasets: DatasetRecord[];
 };
 
+export type DatasetMetricsRecord = {
+  detection_count: number;
+  average_confidence_score: number | null;
+  correction_count: number;
+  correction_rate: number;
+};
+
+export type DatasetMetricsResponse = {
+  dataset_id: number;
+  run: InferenceRunRecord | null;
+  metrics: DatasetMetricsRecord;
+};
+
 export type FrameListResponse = {
   dataset: DatasetRecord;
   frames: FrameRecord[];
