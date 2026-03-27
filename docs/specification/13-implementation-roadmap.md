@@ -1,6 +1,6 @@
 # 13. Implementation Roadmap
 
-Status: Updated after Slice 7
+Status: Updated after Slice 8
 
 ## Current Progress
 
@@ -14,10 +14,11 @@ Completed slices:
 - Slice 5: .NET bridge minimum
 - Slice 6: detection backend
 - Slice 7: detection overlay UI
+- Slice 8: correction persistence backend
 
 Next planned slice:
 
-- Slice 8: correction persistence backend
+- Slice 9: annotation editing UI
 
 ## Planning Assumptions
 
@@ -154,6 +155,9 @@ Day 2 scope is now effectively complete in the current repository state.
 - Original model output remains inspectable
 - The correction workflow is demo-ready and visually clear
 - Invalid edits are rejected predictably
+
+Status note:
+The backend half of Day 3 is now complete through Slice 8. FastAPI persists one active correction per detection with separate original, corrected, and effective state handling. Direct annotation editing remains deferred to Slice 9.
 
 ## Day 4: Depth, 3D, And Monitoring
 

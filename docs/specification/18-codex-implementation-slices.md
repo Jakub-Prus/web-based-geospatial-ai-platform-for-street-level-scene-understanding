@@ -1,6 +1,6 @@
 # 18. Codex Implementation Slices
 
-Status: Active implementation plan, updated after Slice 7
+Status: Active implementation plan, updated after Slice 8
 
 ## Purpose
 
@@ -338,6 +338,8 @@ Current result:
 
 ## Slice 8: Correction Persistence Backend
 
+Status: Implemented
+
 ### Goal
 
 Store human corrections separately from model output.
@@ -368,6 +370,13 @@ Store human corrections separately from model output.
 ### Stop Condition
 
 - One detection can be corrected and that correction survives reload.
+
+Current result:
+
+- FastAPI persists one correction record per detection without mutating the original `detections` row.
+- Corrections carry `pending`, `approved`, or `rejected` review status plus optional corrected label and bounding-box state.
+- Reloading the same frame returns saved corrections from the backend.
+- The correction payload exposes original, corrected, and effective detection state so the original model output remains recoverable before UI editing starts.
 
 ## Slice 9: Annotation Editing UI
 

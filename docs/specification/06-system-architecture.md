@@ -1,6 +1,6 @@
 # 06. System Architecture
 
-Status: Proposed v1
+Status: Updated after Slice 8
 
 ## High-Level Components
 
@@ -26,6 +26,7 @@ Status: Proposed v1
 - Produces detections, segmentation masks, or depth maps
 - Generates derived outputs for visualization, annotation review, and monitoring
 - Serves lightweight dataset and run metadata needed by the frontend
+- Persists review corrections separately from raw model detections
 
 ### .NET Bridge Service
 
@@ -44,6 +45,11 @@ Status: Proposed v1
 7. Frontend retrieves map data, imagery references, detections, depth-derived geometry, and review state.
 8. User saves corrections through the FastAPI service.
 9. Monitoring views aggregate original output and correction outcomes.
+
+## Current Persistence Note
+
+- The implemented MVP slices currently persist dataset, detection, and correction metadata in a local SQLite database inside the FastAPI service for fast iteration.
+- PostgreSQL plus PostGIS remain part of the target Docker and deployment architecture for later slices that need richer geospatial storage.
 
 ## Data Lifecycle
 

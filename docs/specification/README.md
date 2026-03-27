@@ -13,13 +13,14 @@ The plan is intentionally aligned to the Cyclomedia Full Stack Developer: Geospa
 
 ## Current Build State
 
-Implementation is currently complete through Slice 7:
+Implementation is currently complete through Slice 8:
 
 - dataset loading and validation
 - spatial browsing with stored camera markers
 - .NET dataset summary bridge
 - persisted detection runs
 - read-only detection overlay rendering in the frontend viewer
+- backend correction persistence with review status and original-versus-corrected state handling
 
 Annotation editing, depth, point-cloud generation, metrics, and export remain planned slices.
 
@@ -71,3 +72,4 @@ This project maps directly to the role:
 - React UI: responsive visualization with overlays and annotation tools
 - 3D opportunity: Three.js point-cloud-style scene view
 - System glue: FastAPI-based ML execution plus a thin .NET bridge for enterprise-style interoperability
+- Review traceability: persisted correction records with recoverable original detections

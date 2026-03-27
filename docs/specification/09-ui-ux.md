@@ -1,6 +1,6 @@
 # 09. UI And UX
 
-Status: Updated after Slice 7
+Status: Updated after Slice 8
 
 ## Current Screens
 
@@ -17,7 +17,7 @@ The implemented workspace is currently a two-panel review layout:
 - left panel: map with stored camera positions and frame selection
 - right panel: street-level image viewer with persisted bounding boxes and run metadata
 
-The future correction sidebar is still deferred until the annotation slices.
+The correction-editing UI is still deferred until Slice 9, but the backend now persists review status and corrected state so the future sidebar can save without another schema change.
 
 ## Primary User Flow
 
@@ -26,9 +26,10 @@ The future correction sidebar is still deferred until the annotation slices.
 3. User waits for job completion and opens the review workspace.
 4. User selects a camera point on the map.
 5. User inspects read-only detections, labels, confidence values, and run status.
-6. Future slice: user edits incorrect predictions.
-7. Future slice: user opens the 3D view for the same frame.
-8. Future slice: user saves corrections and views updated metrics.
+6. Current backend slice: correction records can already be saved and reloaded for a selected detection.
+7. Future slice: user edits incorrect predictions directly in the image viewer.
+8. Future slice: user opens the 3D view for the same frame.
+9. Future slice: user views updated metrics.
 
 ## Visualization Requirements
 
@@ -37,6 +38,7 @@ The future correction sidebar is still deferred until the annotation slices.
 - The current UI must expose run state clearly for completed, empty, failed, and missing-run cases.
 - Future slice: the image viewer should support zoom and pan.
 - Future slice: the annotation UI should allow drawing, resizing, relabeling, and deleting boxes.
+- Future slice: the review UI should expose `pending`, `approved`, and `rejected` states backed by the Slice 8 correction endpoints.
 - The 3D view must render depth-derived point data in Three.js.
 
 ## Current Empty States

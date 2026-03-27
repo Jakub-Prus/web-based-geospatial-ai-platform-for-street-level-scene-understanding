@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Iterable
 
 from app.database import (
+    CORRECTIONS_TABLE_NAME,
     DATASETS_TABLE_NAME,
     DETECTIONS_TABLE_NAME,
     FRAMES_TABLE_NAME,
@@ -148,6 +149,40 @@ class DatasetRepository:
         ).fetchone()
         if row is None:
             raise KeyError(run_id)
+
+        return dict(row)
+
+    def get_detection(
+        self,
+        *,
+        dataset_id: int,
+        frame_id: str,
+        detection_id: int,
+    ) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                detections.id,
+                detections.inference_run_id,
+                detections.frame_id,
+                detections.class_name,
+                detections.confidence_score,
+                detections.x_min,
+                detections.y_min,
+                detections.x_max,
+                detections.y_max,
+                detections.created_at
+            FROM {DETECTIONS_TABLE_NAME} AS detections
+            INNER JOIN {INFERENCE_RUNS_TABLE_NAME} AS runs
+                ON runs.id = detections.inference_run_id
+            WHERE detections.id = ?
+              AND detections.frame_id = ?
+              AND runs.dataset_id = ?
+            """,
+            (detection_id, frame_id, dataset_id),
+        ).fetchone()
+        if row is None:
+            raise KeyError((dataset_id, frame_id, detection_id))
 
         return dict(row)
 
@@ -436,6 +471,195 @@ class DatasetRepository:
             WHERE inference_run_id = ?
               AND frame_id = ?
             ORDER BY confidence_score DESC, id ASC
+            """,
+            (run_record["id"], frame_id),
+        ).fetchall()
+
+        return dict(run_record), [dict(row) for row in rows]
+
+    def save_correction(
+        self,
+        *,
+        dataset_id: int,
+        frame_id: str,
+        detection_id: int,
+        review_status: str,
+        corrected_class_name: str | None,
+        corrected_x_min: float | None,
+        corrected_y_min: float | None,
+        corrected_x_max: float | None,
+        corrected_y_max: float | None,
+        saved_at: str,
+    ) -> dict[str, object]:
+        self.get_detection(
+            dataset_id=dataset_id,
+            frame_id=frame_id,
+            detection_id=detection_id,
+        )
+
+        with self.connection:
+            existing_correction = self.connection.execute(
+                f"""
+                SELECT id, created_at
+                FROM {CORRECTIONS_TABLE_NAME}
+                WHERE detection_id = ?
+                """,
+                (detection_id,),
+            ).fetchone()
+
+            if existing_correction is None:
+                self.connection.execute(
+                    f"""
+                    INSERT INTO {CORRECTIONS_TABLE_NAME} (
+                        detection_id,
+                        review_status,
+                        corrected_class_name,
+                        corrected_x_min,
+                        corrected_y_min,
+                        corrected_x_max,
+                        corrected_y_max,
+                        created_at,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        detection_id,
+                        review_status,
+                        corrected_class_name,
+                        corrected_x_min,
+                        corrected_y_min,
+                        corrected_x_max,
+                        corrected_y_max,
+                        saved_at,
+                        saved_at,
+                    ),
+                )
+            else:
+                self.connection.execute(
+                    f"""
+                    UPDATE {CORRECTIONS_TABLE_NAME}
+                    SET
+                        review_status = ?,
+                        corrected_class_name = ?,
+                        corrected_x_min = ?,
+                        corrected_y_min = ?,
+                        corrected_x_max = ?,
+                        corrected_y_max = ?,
+                        updated_at = ?
+                    WHERE detection_id = ?
+                    """,
+                    (
+                        review_status,
+                        corrected_class_name,
+                        corrected_x_min,
+                        corrected_y_min,
+                        corrected_x_max,
+                        corrected_y_max,
+                        saved_at,
+                        detection_id,
+                    ),
+                )
+
+        return self.get_correction(
+            dataset_id=dataset_id,
+            frame_id=frame_id,
+            detection_id=detection_id,
+        )
+
+    def get_correction(
+        self,
+        *,
+        dataset_id: int,
+        frame_id: str,
+        detection_id: int,
+    ) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                corrections.id AS correction_id,
+                corrections.detection_id,
+                corrections.review_status,
+                corrections.corrected_class_name,
+                corrections.corrected_x_min,
+                corrections.corrected_y_min,
+                corrections.corrected_x_max,
+                corrections.corrected_y_max,
+                corrections.created_at AS correction_created_at,
+                corrections.updated_at AS correction_updated_at,
+                detections.id AS original_detection_id,
+                detections.inference_run_id AS original_inference_run_id,
+                detections.frame_id AS original_frame_id,
+                detections.class_name AS original_class_name,
+                detections.confidence_score AS original_confidence_score,
+                detections.x_min AS original_x_min,
+                detections.y_min AS original_y_min,
+                detections.x_max AS original_x_max,
+                detections.y_max AS original_y_max,
+                detections.created_at AS original_created_at
+            FROM {CORRECTIONS_TABLE_NAME} AS corrections
+            INNER JOIN {DETECTIONS_TABLE_NAME} AS detections
+                ON detections.id = corrections.detection_id
+            INNER JOIN {INFERENCE_RUNS_TABLE_NAME} AS runs
+                ON runs.id = detections.inference_run_id
+            WHERE corrections.detection_id = ?
+              AND detections.frame_id = ?
+              AND runs.dataset_id = ?
+            """,
+            (detection_id, frame_id, dataset_id),
+        ).fetchone()
+        if row is None:
+            raise KeyError((dataset_id, frame_id, detection_id))
+
+        return dict(row)
+
+    def list_corrections_for_frame(
+        self,
+        *,
+        dataset_id: int,
+        frame_id: str,
+        run_id: int | None = None,
+        run_type: str,
+    ) -> tuple[dict[str, object], list[dict[str, object]]]:
+        run_record = (
+            self.get_detection_run(run_id)
+            if run_id is not None
+            else self.get_latest_detection_run_for_dataset(dataset_id, run_type)
+        )
+        if (
+            int(run_record["dataset_id"]) != dataset_id
+            or run_record["run_type"] != run_type
+        ):
+            raise KeyError((dataset_id, frame_id, run_id))
+
+        rows = self.connection.execute(
+            f"""
+            SELECT
+                corrections.id AS correction_id,
+                corrections.detection_id,
+                corrections.review_status,
+                corrections.corrected_class_name,
+                corrections.corrected_x_min,
+                corrections.corrected_y_min,
+                corrections.corrected_x_max,
+                corrections.corrected_y_max,
+                corrections.created_at AS correction_created_at,
+                corrections.updated_at AS correction_updated_at,
+                detections.id AS original_detection_id,
+                detections.inference_run_id AS original_inference_run_id,
+                detections.frame_id AS original_frame_id,
+                detections.class_name AS original_class_name,
+                detections.confidence_score AS original_confidence_score,
+                detections.x_min AS original_x_min,
+                detections.y_min AS original_y_min,
+                detections.x_max AS original_x_max,
+                detections.y_max AS original_y_max,
+                detections.created_at AS original_created_at
+            FROM {CORRECTIONS_TABLE_NAME} AS corrections
+            INNER JOIN {DETECTIONS_TABLE_NAME} AS detections
+                ON detections.id = corrections.detection_id
+            WHERE detections.inference_run_id = ?
+              AND detections.frame_id = ?
+            ORDER BY corrections.updated_at DESC, corrections.id DESC
             """,
             (run_record["id"], frame_id),
         ).fetchall()

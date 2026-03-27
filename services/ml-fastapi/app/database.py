@@ -7,6 +7,7 @@ DATASETS_TABLE_NAME = "datasets"
 FRAMES_TABLE_NAME = "frames"
 INFERENCE_RUNS_TABLE_NAME = "inference_runs"
 DETECTIONS_TABLE_NAME = "detections"
+CORRECTIONS_TABLE_NAME = "corrections"
 FRAME_UNIQUE_INDEX_NAME = "idx_frames_dataset_id_frame_id"
 LEGACY_FRAME_PRIMARY_KEY_COLUMN = "frame_id"
 FRAME_PRIMARY_KEY_COLUMN = "id"
@@ -103,6 +104,23 @@ def initialize_database(database_path: Path) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_detections_frame_id
             ON {DETECTIONS_TABLE_NAME}(frame_id);
+
+            CREATE TABLE IF NOT EXISTS {CORRECTIONS_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                detection_id INTEGER NOT NULL UNIQUE,
+                review_status TEXT NOT NULL,
+                corrected_class_name TEXT,
+                corrected_x_min REAL,
+                corrected_y_min REAL,
+                corrected_x_max REAL,
+                corrected_y_max REAL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (detection_id) REFERENCES {DETECTIONS_TABLE_NAME}(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_corrections_detection_id
+            ON {CORRECTIONS_TABLE_NAME}(detection_id);
             """
         )
 

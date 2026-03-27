@@ -1,6 +1,6 @@
 # 08. APIs And Interfaces
 
-Status: Updated for implemented Slices 3-7
+Status: Updated for implemented Slices 3-8
 
 ## FastAPI Surface Implemented Today
 
@@ -26,6 +26,15 @@ Status: Updated for implemented Slices 3-7
 
 The frame-detections endpoint returns the latest detection run for the dataset by default and can optionally be filtered with `run_id`.
 
+### Correction Endpoints
+
+- `POST /datasets/{dataset_id}/frames/{frame_id}/detections/{detection_id}/correction`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/corrections`
+
+The save-correction endpoint accepts a `review_status` of `pending`, `approved`, or `rejected` plus an optional corrected label and/or corrected bounding box.
+
+The frame-corrections endpoint defaults to the latest detection run for the dataset, accepts optional `run_id` filtering, and returns the selected run plus the original detection, optional corrected detection, and resolved effective detection state.
+
 ## Thin .NET Bridge Surface
 
 The bridge remains intentionally small in Slice 5:
@@ -37,7 +46,6 @@ The bridge remains intentionally small in Slice 5:
 
 These interfaces remain planned but are not implemented yet:
 
-- correction endpoints
 - depth and point-cloud endpoints
 - metrics endpoints
 - export endpoints
@@ -47,6 +55,7 @@ These interfaces remain planned but are not implemented yet:
 - FastAPI is the client-facing backend for the current MVP slices.
 - Detection runs include explicit run type, model version, processing counts, and status.
 - Detection payloads remain stable enough for replayable frontend overlays.
+- Correction payloads preserve original model detections and never overwrite raw detection rows.
 - The .NET bridge consumes summary-level metadata only and does not duplicate FastAPI write ownership.
 
 ## Example Flow
@@ -56,13 +65,15 @@ These interfaces remain planned but are not implemented yet:
 3. User selects a frame marker and the frontend requests frame detail and preview.
 4. Frontend requests `GET /datasets/{dataset_id}/frames/{frame_id}/detections`.
 5. The image viewer renders stored boxes using the persisted pixel-space contract and displays the latest run status.
-6. Future slices add correction persistence, depth, 3D, metrics, and export.
+6. The current backend can save and reload correction state while UI editing remains deferred.
+7. Future slices add annotation tools, depth, 3D, metrics, and export.
 
 ## Required Payload Contracts
 
 - Dataset frame records include image path, latitude, longitude, heading, timestamp, width, and height.
 - Detection records include frame id, class label, confidence, and bounding box in image pixel space.
 - Bounding boxes remain in `x_min`, `y_min`, `x_max`, `y_max` image coordinates until the frontend scales them for display.
+- Correction records include review status plus separate original, corrected, and effective detection state.
 
 ## External Integrations
 

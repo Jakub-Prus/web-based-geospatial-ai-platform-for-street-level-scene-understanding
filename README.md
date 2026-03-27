@@ -1,8 +1,8 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 7 detection overlay workspace for the planned geospatial AI demo platform.
+Slice 8 correction-persistence workspace for the planned geospatial AI demo platform.
 
-Slices `0` through `7` are now implemented:
+Slices `0` through `8` are now implemented:
 
 - dataset contract and geometry contract are frozen
 - React, FastAPI, and .NET service skeletons are in place
@@ -11,6 +11,7 @@ Slices `0` through `7` are now implemented:
 - the .NET bridge exposes dataset summary endpoints
 - detection runs are persisted in FastAPI
 - stored detections render in the frontend image viewer with run-state feedback
+- human review corrections are persisted separately from original detections in FastAPI
 
 ## Specification Docs
 
@@ -229,6 +230,24 @@ The viewer now includes:
 
 Editing tools are intentionally deferred to Slice 9.
 
+## Slice 8 Correction Persistence Backend
+
+FastAPI now persists reviewer decisions separately from model detections so the original output remains queryable after a correction is saved.
+
+Correction endpoints:
+
+- `POST /datasets/{dataset_id}/frames/{frame_id}/detections/{detection_id}/correction`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/corrections`
+
+Each correction stores:
+
+- the linked original detection id
+- a review status of `pending`, `approved`, or `rejected`
+- an optional corrected label and corrected bounding-box state
+- timestamps for initial save and latest update
+
+The correction response includes the `original_detection`, optional `corrected_detection`, and the resolved `effective_detection` so the backend can preserve both states without enabling annotation UI yet.
+
 ## Local Verification
 
 Frontend checks:
@@ -240,7 +259,7 @@ npm test
 npm run build
 ```
 
-Frontend coverage currently runs through Vitest with V8 coverage and exercises the frame-selection and overlay-rendering flow.
+Frontend coverage currently runs through Vitest with V8 coverage and passes at `81.17%` total coverage while exercising the frame-selection and overlay-rendering flow.
 
 FastAPI checks:
 
@@ -250,6 +269,6 @@ source .venv/bin/activate
 python -m pytest --cov=app --cov-report=term-missing
 ```
 
-The current FastAPI suite passes at `87%` total coverage.
+The current FastAPI suite passes at `87%` total coverage, including Slice 8 correction persistence and reload-regression coverage.
 
 .NET bridge tests require a local `.NET` SDK, not just the runtime. In the current environment `dotnet.exe` is present, but `dotnet --list-sdks` returns no installed SDKs.

@@ -123,12 +123,12 @@ def test_client_factory(
     clients: list[TestClient] = []
     client_count = 0
 
-    def _build_test_client(*, detector_factory=None) -> TestClient:
+    def _build_test_client(*, detector_factory=None, database_path: Path | None = None) -> TestClient:
         nonlocal client_count
 
-        database_path = tmp_path / f"test-platform-{client_count}.db"
+        resolved_database_path = database_path or tmp_path / f"test-platform-{client_count}.db"
         client_count += 1
-        os.environ["ML_FASTAPI_DB_PATH"] = str(database_path)
+        os.environ["ML_FASTAPI_DB_PATH"] = str(resolved_database_path)
         app = create_app(detector_factory=detector_factory)
         client = TestClient(app)
         clients.append(client)

@@ -29,18 +29,26 @@ from app.inference import (
 )
 from app.repository import DatasetRepository
 from app.schemas import (
+    DETECTION_SOURCE_CORRECTED,
+    DETECTION_SOURCE_ORIGINAL,
+    REVIEW_STATUS_REJECTED,
     DatasetListResponse,
     DatasetLoadRequest,
     DatasetLoadResponse,
     DatasetRecord,
+    DetectionCorrectionRecord,
+    DetectionCorrectionResponse,
     DetectionRecord,
+    DetectionStateRecord,
     DetectionRunRequest,
     DetectionRunResponse,
     FrameDetailRecord,
     FrameDetailResponse,
+    FrameCorrectionsResponse,
     FrameDetectionsResponse,
     FrameListResponse,
     InferenceRunRecord,
+    SaveCorrectionRequest,
 )
 
 SERVICE_NAME = "ml-fastapi"
@@ -105,6 +113,133 @@ def clip_detection_bbox(
 
 def default_detector_factory(model_path: Path) -> ObjectDetector:
     return UltralyticsObjectDetector(model_path)
+
+
+def validate_bbox_coordinates(
+    *,
+    x_min: float,
+    y_min: float,
+    x_max: float,
+    y_max: float,
+    image_width: int,
+    image_height: int,
+) -> None:
+    if x_min > x_max or y_min > y_max:
+        raise ValueError(
+            "Corrected bounding-box coordinates must preserve x_min <= x_max and y_min <= y_max."
+        )
+
+    max_x_coordinate = float(image_width)
+    max_y_coordinate = float(image_height)
+    for coordinate_name, coordinate_value, maximum_value in (
+        ("x_min", x_min, max_x_coordinate),
+        ("y_min", y_min, max_y_coordinate),
+        ("x_max", x_max, max_x_coordinate),
+        ("y_max", y_max, max_y_coordinate),
+    ):
+        if not MINIMUM_IMAGE_COORDINATE <= coordinate_value <= maximum_value:
+            raise ValueError(
+                f"Corrected {coordinate_name} must be between "
+                f"{MINIMUM_IMAGE_COORDINATE} and {maximum_value}."
+            )
+
+
+def build_detection_state(
+    *,
+    detection_id: int,
+    inference_run_id: int,
+    frame_id: str,
+    class_name: str,
+    confidence_score: float,
+    x_min: float,
+    y_min: float,
+    x_max: float,
+    y_max: float,
+    source: str,
+) -> DetectionStateRecord:
+    return DetectionStateRecord(
+        detection_id=detection_id,
+        inference_run_id=inference_run_id,
+        frame_id=frame_id,
+        class_name=class_name,
+        confidence_score=confidence_score,
+        x_min=x_min,
+        y_min=y_min,
+        x_max=x_max,
+        y_max=y_max,
+        source=source,
+    )
+
+
+def build_original_detection_state(correction_record: dict[str, object]) -> DetectionStateRecord:
+    return build_detection_state(
+        detection_id=int(correction_record["original_detection_id"]),
+        inference_run_id=int(correction_record["original_inference_run_id"]),
+        frame_id=str(correction_record["original_frame_id"]),
+        class_name=str(correction_record["original_class_name"]),
+        confidence_score=float(correction_record["original_confidence_score"]),
+        x_min=float(correction_record["original_x_min"]),
+        y_min=float(correction_record["original_y_min"]),
+        x_max=float(correction_record["original_x_max"]),
+        y_max=float(correction_record["original_y_max"]),
+        source=DETECTION_SOURCE_ORIGINAL,
+    )
+
+
+def build_corrected_detection_state(
+    correction_record: dict[str, object],
+) -> DetectionStateRecord | None:
+    corrected_class_name = correction_record["corrected_class_name"]
+    corrected_x_min = correction_record["corrected_x_min"]
+    corrected_y_min = correction_record["corrected_y_min"]
+    corrected_x_max = correction_record["corrected_x_max"]
+    corrected_y_max = correction_record["corrected_y_max"]
+
+    if (
+        corrected_class_name is None
+        and corrected_x_min is None
+        and corrected_y_min is None
+        and corrected_x_max is None
+        and corrected_y_max is None
+    ):
+        return None
+
+    return build_detection_state(
+        detection_id=int(correction_record["original_detection_id"]),
+        inference_run_id=int(correction_record["original_inference_run_id"]),
+        frame_id=str(correction_record["original_frame_id"]),
+        class_name=str(corrected_class_name),
+        confidence_score=float(correction_record["original_confidence_score"]),
+        x_min=float(corrected_x_min),
+        y_min=float(corrected_y_min),
+        x_max=float(corrected_x_max),
+        y_max=float(corrected_y_max),
+        source=DETECTION_SOURCE_CORRECTED,
+    )
+
+
+def build_correction_response_record(
+    correction_record: dict[str, object],
+) -> DetectionCorrectionRecord:
+    original_detection = build_original_detection_state(correction_record)
+    corrected_detection = build_corrected_detection_state(correction_record)
+    review_status = str(correction_record["review_status"])
+    effective_detection = (
+        None
+        if review_status == REVIEW_STATUS_REJECTED
+        else corrected_detection or original_detection
+    )
+
+    return DetectionCorrectionRecord(
+        id=int(correction_record["correction_id"]),
+        detection_id=int(correction_record["detection_id"]),
+        review_status=review_status,
+        created_at=str(correction_record["correction_created_at"]),
+        updated_at=str(correction_record["correction_updated_at"]),
+        original_detection=original_detection,
+        corrected_detection=corrected_detection,
+        effective_detection=effective_detection,
+    )
 
 
 def create_app(detector_factory: DetectorFactory | None = None) -> FastAPI:
@@ -416,6 +551,152 @@ def create_app(detector_factory: DetectorFactory | None = None) -> FastAPI:
             run=InferenceRunRecord.model_validate(run_record),
             detections=[
                 DetectionRecord.model_validate(detection) for detection in detections
+            ],
+        )
+
+    @app.post(
+        "/datasets/{dataset_id}/frames/{frame_id}/detections/{detection_id}/correction",
+        response_model=DetectionCorrectionResponse,
+        status_code=HTTPStatus.OK,
+    )
+    async def save_detection_correction(
+        dataset_id: int,
+        frame_id: str,
+        detection_id: int,
+        request: SaveCorrectionRequest,
+    ) -> DetectionCorrectionResponse:
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                frame_record = repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+            try:
+                original_detection = repository.get_detection(
+                    dataset_id=dataset_id,
+                    frame_id=frame_id,
+                    detection_id=detection_id,
+                )
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=(
+                        f"Detection {detection_id} was not found in frame {frame_id} "
+                        f"for dataset {dataset_id}."
+                    ),
+                ) from error
+
+            corrected_class_name: str | None = None
+            corrected_x_min: float | None = None
+            corrected_y_min: float | None = None
+            corrected_x_max: float | None = None
+            corrected_y_max: float | None = None
+
+            if request.corrected_detection is not None:
+                corrected_class_name = (
+                    request.corrected_detection.class_name
+                    or str(original_detection["class_name"])
+                )
+                corrected_x_min = (
+                    float(request.corrected_detection.x_min)
+                    if request.corrected_detection.x_min is not None
+                    else float(original_detection["x_min"])
+                )
+                corrected_y_min = (
+                    float(request.corrected_detection.y_min)
+                    if request.corrected_detection.y_min is not None
+                    else float(original_detection["y_min"])
+                )
+                corrected_x_max = (
+                    float(request.corrected_detection.x_max)
+                    if request.corrected_detection.x_max is not None
+                    else float(original_detection["x_max"])
+                )
+                corrected_y_max = (
+                    float(request.corrected_detection.y_max)
+                    if request.corrected_detection.y_max is not None
+                    else float(original_detection["y_max"])
+                )
+
+                try:
+                    validate_bbox_coordinates(
+                        x_min=corrected_x_min,
+                        y_min=corrected_y_min,
+                        x_max=corrected_x_max,
+                        y_max=corrected_y_max,
+                        image_width=int(frame_record["image_width"]),
+                        image_height=int(frame_record["image_height"]),
+                    )
+                except ValueError as error:
+                    raise HTTPException(
+                        status_code=HTTPStatus.BAD_REQUEST,
+                        detail=str(error),
+                    ) from error
+
+            correction_record = repository.save_correction(
+                dataset_id=dataset_id,
+                frame_id=frame_id,
+                detection_id=detection_id,
+                review_status=request.review_status,
+                corrected_class_name=corrected_class_name,
+                corrected_x_min=corrected_x_min,
+                corrected_y_min=corrected_y_min,
+                corrected_x_max=corrected_x_max,
+                corrected_y_max=corrected_y_max,
+                saved_at=utc_now_isoformat(),
+            )
+
+        return DetectionCorrectionResponse(
+            correction=build_correction_response_record(correction_record)
+        )
+
+    @app.get(
+        "/datasets/{dataset_id}/frames/{frame_id}/corrections",
+        response_model=FrameCorrectionsResponse,
+        status_code=HTTPStatus.OK,
+    )
+    async def get_frame_corrections(
+        dataset_id: int,
+        frame_id: str,
+        run_id: int | None = None,
+    ) -> FrameCorrectionsResponse:
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+            try:
+                run_record, correction_records = repository.list_corrections_for_frame(
+                    dataset_id=dataset_id,
+                    frame_id=frame_id,
+                    run_id=run_id,
+                    run_type=DETECTION_RUN_TYPE,
+                )
+            except KeyError as error:
+                missing_run_id = run_id if run_id is not None else "latest"
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=(
+                        f"Detection run {missing_run_id} was not found for dataset "
+                        f"{dataset_id}."
+                    ),
+                ) from error
+
+        return FrameCorrectionsResponse(
+            frame_id=frame_id,
+            run=InferenceRunRecord.model_validate(run_record),
+            corrections=[
+                build_correction_response_record(correction_record)
+                for correction_record in correction_records
             ],
         )
 

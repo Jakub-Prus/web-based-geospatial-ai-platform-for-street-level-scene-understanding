@@ -1,6 +1,6 @@
 # 07. Data Model
 
-Status: Proposed v1
+Status: Updated after Slice 8
 
 ## Core Entities
 
@@ -58,17 +58,24 @@ Status: Proposed v1
 - frame_id
 - class_name
 - confidence_score
-- bbox_json
-- geometry
+- x_min
+- y_min
+- x_max
+- y_max
+- created_at
 
 ### Correction
 
 - id
 - detection_id
-- corrected_label
-- corrected_bbox_json
 - review_status
+- corrected_class_name
+- corrected_x_min
+- corrected_y_min
+- corrected_x_max
+- corrected_y_max
 - created_at
+- updated_at
 
 ### DepthArtifact
 
@@ -97,10 +104,12 @@ Status: Proposed v1
 - One inference run has many detections.
 - One inference run can have many depth artifacts.
 - One depth artifact can produce one or more point-cloud artifacts.
-- One detection can have zero or many corrections.
+- In the current Slice 8 implementation, one detection can have zero or one active correction record.
+- The original model detection remains stored separately in `detections`, so review can return both original and corrected state without mutating the model output row.
 - One model version can be referenced by many inference runs.
 
 ## Storage Notes
 
 - Geospatial coordinates and derived geometry should live in PostGIS-enabled columns.
 - Large binary assets such as images, masks, depth maps, and point clouds should live in object storage, with database references.
+- The current local MVP stores detection and correction bounding boxes as explicit numeric columns so the overlay and correction flows stay simple in SQLite.
