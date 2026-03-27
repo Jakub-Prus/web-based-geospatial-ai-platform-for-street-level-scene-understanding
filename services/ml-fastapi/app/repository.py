@@ -7,6 +7,7 @@ from app.database import (
     CORRECTIONS_TABLE_NAME,
     DATASETS_TABLE_NAME,
     DETECTIONS_TABLE_NAME,
+    DEPTH_ARTIFACTS_TABLE_NAME,
     FRAMES_TABLE_NAME,
     INFERENCE_RUNS_TABLE_NAME,
 )
@@ -133,6 +134,7 @@ class DatasetRepository:
                 id,
                 dataset_id,
                 run_type,
+                frame_id,
                 status,
                 model_name,
                 model_path,
@@ -197,6 +199,7 @@ class DatasetRepository:
                 id,
                 dataset_id,
                 run_type,
+                frame_id,
                 status,
                 model_name,
                 model_path,
@@ -216,6 +219,42 @@ class DatasetRepository:
         ).fetchone()
         if row is None:
             raise KeyError((dataset_id, run_type))
+
+        return dict(row)
+
+    def get_latest_inference_run_for_frame(
+        self,
+        dataset_id: int,
+        frame_id: str,
+        run_type: str,
+    ) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                id,
+                dataset_id,
+                run_type,
+                frame_id,
+                status,
+                model_name,
+                model_path,
+                frame_count,
+                processed_frame_count,
+                detection_count,
+                error_message,
+                started_at,
+                completed_at
+            FROM {INFERENCE_RUNS_TABLE_NAME}
+            WHERE dataset_id = ?
+              AND frame_id = ?
+              AND run_type = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (dataset_id, frame_id, run_type),
+        ).fetchone()
+        if row is None:
+            raise KeyError((dataset_id, frame_id, run_type))
 
         return dict(row)
 
@@ -301,6 +340,7 @@ class DatasetRepository:
         *,
         dataset_id: int,
         run_type: str,
+        frame_id: str | None,
         status: str,
         model_name: str,
         model_path: str,
@@ -313,6 +353,7 @@ class DatasetRepository:
                 INSERT INTO {INFERENCE_RUNS_TABLE_NAME} (
                     dataset_id,
                     run_type,
+                    frame_id,
                     status,
                     model_name,
                     model_path,
@@ -322,11 +363,12 @@ class DatasetRepository:
                     started_at,
                     completed_at,
                     error_message
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     dataset_id,
                     run_type,
+                    frame_id,
                     status,
                     model_name,
                     model_path,
@@ -476,6 +518,108 @@ class DatasetRepository:
         ).fetchall()
 
         return dict(run_record), [dict(row) for row in rows]
+
+    def save_depth_artifact(
+        self,
+        *,
+        dataset_id: int,
+        frame_id: str,
+        inference_run_id: int,
+        depth_uri: str,
+        width: int,
+        height: int,
+        depth_format: str,
+        depth_scale: float,
+        created_at: str,
+    ) -> dict[str, object]:
+        with self.connection:
+            cursor = self.connection.execute(
+                f"""
+                INSERT INTO {DEPTH_ARTIFACTS_TABLE_NAME} (
+                    inference_run_id,
+                    frame_id,
+                    depth_uri,
+                    depth_format,
+                    width,
+                    height,
+                    depth_scale,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    inference_run_id,
+                    frame_id,
+                    depth_uri,
+                    depth_format,
+                    width,
+                    height,
+                    depth_scale,
+                    created_at,
+                ),
+            )
+            self.connection.execute(
+                f"""
+                UPDATE {FRAMES_TABLE_NAME}
+                SET depth_path = ?
+                WHERE dataset_id = ?
+                  AND frame_id = ?
+                """,
+                (depth_uri, dataset_id, frame_id),
+            )
+
+        return self.get_depth_artifact(int(cursor.lastrowid))
+
+    def get_depth_artifact(self, depth_artifact_id: int) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                depth_artifacts.id,
+                depth_artifacts.inference_run_id,
+                depth_artifacts.frame_id,
+                depth_artifacts.depth_uri,
+                depth_artifacts.depth_format,
+                depth_artifacts.width,
+                depth_artifacts.height,
+                depth_artifacts.depth_scale,
+                depth_artifacts.created_at
+            FROM {DEPTH_ARTIFACTS_TABLE_NAME} AS depth_artifacts
+            WHERE depth_artifacts.id = ?
+            """,
+            (depth_artifact_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(depth_artifact_id)
+
+        return dict(row)
+
+    def get_depth_artifact_for_run(
+        self,
+        *,
+        inference_run_id: int,
+        frame_id: str,
+    ) -> dict[str, object] | None:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                depth_artifacts.id,
+                depth_artifacts.inference_run_id,
+                depth_artifacts.frame_id,
+                depth_artifacts.depth_uri,
+                depth_artifacts.depth_format,
+                depth_artifacts.width,
+                depth_artifacts.height,
+                depth_artifacts.depth_scale,
+                depth_artifacts.created_at
+            FROM {DEPTH_ARTIFACTS_TABLE_NAME} AS depth_artifacts
+            WHERE depth_artifacts.inference_run_id = ?
+              AND depth_artifacts.frame_id = ?
+            ORDER BY depth_artifacts.id DESC
+            LIMIT 1
+            """,
+            (inference_run_id, frame_id),
+        ).fetchone()
+
+        return None if row is None else dict(row)
 
     def save_correction(
         self,

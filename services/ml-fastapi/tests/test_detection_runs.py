@@ -6,24 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.inference import DetectionPrediction
-
-
-def _load_sample_dataset(
-    client: TestClient,
-    sample_dataset: tuple[Path, Path],
-) -> int:
-    dataset_path, preview_archive_path = sample_dataset
-    response = client.post(
-        "/datasets/load",
-        json={
-            "dataset_path": str(dataset_path),
-            "preview_archive_path": str(preview_archive_path),
-            "dataset_name": "detection-test-dataset",
-        },
-    )
-
-    assert response.status_code == 201
-    return int(response.json()["dataset"]["id"])
+from conftest import load_sample_dataset
 
 
 def test_detection_run_persists_run_status_and_frame_detections(
@@ -48,7 +31,11 @@ def test_detection_run_persists_run_status_and_frame_detections(
             ]
 
     client = test_client_factory(detector_factory=lambda _model_path: FakeDetector())
-    dataset_id = _load_sample_dataset(client, sample_dataset)
+    dataset_id = load_sample_dataset(
+        client,
+        sample_dataset,
+        dataset_name="detection-test-dataset",
+    )
 
     trigger_response = client.post(f"/datasets/{dataset_id}/runs/detect", json={})
 
@@ -91,7 +78,11 @@ def test_detection_run_records_empty_state_when_no_objects_are_found(
             return [[] for _ in image_paths]
 
     client = test_client_factory(detector_factory=lambda _model_path: EmptyDetector())
-    dataset_id = _load_sample_dataset(client, sample_dataset)
+    dataset_id = load_sample_dataset(
+        client,
+        sample_dataset,
+        dataset_name="detection-test-dataset",
+    )
 
     trigger_response = client.post(f"/datasets/{dataset_id}/runs/detect", json={})
 
@@ -120,7 +111,11 @@ def test_detection_run_records_failed_state_when_detector_raises(
             raise RuntimeError("synthetic detector failure")
 
     client = test_client_factory(detector_factory=lambda _model_path: FailingDetector())
-    dataset_id = _load_sample_dataset(client, sample_dataset)
+    dataset_id = load_sample_dataset(
+        client,
+        sample_dataset,
+        dataset_name="detection-test-dataset",
+    )
 
     trigger_response = client.post(f"/datasets/{dataset_id}/runs/detect", json={})
 
@@ -165,7 +160,11 @@ def test_detection_correction_persists_across_reload_and_preserves_original_dete
         detector_factory=lambda _model_path: FakeDetector(),
         database_path=database_path,
     )
-    dataset_id = _load_sample_dataset(client, sample_dataset)
+    dataset_id = load_sample_dataset(
+        client,
+        sample_dataset,
+        dataset_name="detection-test-dataset",
+    )
     frame_id = "20190401121727_camera_frontright_000013460"
 
     run_response = client.post(f"/datasets/{dataset_id}/runs/detect", json={})
@@ -250,7 +249,11 @@ def test_detection_correction_supports_review_status_updates_without_losing_orig
             ]
 
     client = test_client_factory(detector_factory=lambda _model_path: FakeDetector())
-    dataset_id = _load_sample_dataset(client, sample_dataset)
+    dataset_id = load_sample_dataset(
+        client,
+        sample_dataset,
+        dataset_name="detection-test-dataset",
+    )
     frame_id = "20190401121727_camera_frontright_000013460"
 
     run_response = client.post(f"/datasets/{dataset_id}/runs/detect", json={})
@@ -317,7 +320,11 @@ def test_detection_correction_rejects_invalid_bbox_coordinates(
             ]
 
     client = test_client_factory(detector_factory=lambda _model_path: FakeDetector())
-    dataset_id = _load_sample_dataset(client, sample_dataset)
+    dataset_id = load_sample_dataset(
+        client,
+        sample_dataset,
+        dataset_name="detection-test-dataset",
+    )
     frame_id = "20190401121727_camera_frontright_000013460"
 
     run_response = client.post(f"/datasets/{dataset_id}/runs/detect", json={})
@@ -366,7 +373,11 @@ def test_detection_correction_rejects_empty_pending_payload(
             ]
 
     client = test_client_factory(detector_factory=lambda _model_path: FakeDetector())
-    dataset_id = _load_sample_dataset(client, sample_dataset)
+    dataset_id = load_sample_dataset(
+        client,
+        sample_dataset,
+        dataset_name="detection-test-dataset",
+    )
     frame_id = "20190401121727_camera_frontright_000013460"
 
     run_response = client.post(f"/datasets/{dataset_id}/runs/detect", json={})

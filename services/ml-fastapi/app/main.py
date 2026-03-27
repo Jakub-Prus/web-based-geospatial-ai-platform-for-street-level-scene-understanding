@@ -6,6 +6,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Callable
 
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -15,15 +16,22 @@ from app.config import (
     resolve_database_path,
     resolve_default_dataset_path,
     resolve_default_detection_model_path,
+    resolve_default_depth_model_path,
+    resolve_depth_artifacts_directory,
     resolve_preview_archive_path,
 )
 from app.database import create_connection, initialize_database
 from app.inference import (
     DETECTION_RUN_TYPE,
+    DEPTH_RUN_TYPE,
     RUN_STATUS_COMPLETED,
     RUN_STATUS_EMPTY,
+    RUN_STATUS_FAILED,
     RUN_STATUS_RUNNING,
     DetectionPrediction,
+    DepthEstimator,
+    DepthPrediction,
+    MidasDepthEstimator,
     ObjectDetector,
     UltralyticsObjectDetector,
 )
@@ -31,7 +39,13 @@ from app.repository import DatasetRepository
 from app.schemas import (
     DETECTION_SOURCE_CORRECTED,
     DETECTION_SOURCE_ORIGINAL,
+    DEPTH_ARTIFACT_STATE_COMPLETED,
+    DEPTH_ARTIFACT_STATE_FAILED,
+    DEPTH_ARTIFACT_STATE_MISSING,
+    DEPTH_ARTIFACT_STATE_RUNNING,
     REVIEW_STATUS_REJECTED,
+    DepthArtifactRecord,
+    DepthRunRequest,
     DatasetListResponse,
     DatasetLoadRequest,
     DatasetLoadResponse,
@@ -42,6 +56,7 @@ from app.schemas import (
     DetectionStateRecord,
     DetectionRunRequest,
     DetectionRunResponse,
+    FrameDepthArtifactResponse,
     FrameDetailRecord,
     FrameDetailResponse,
     FrameCorrectionsResponse,
@@ -61,8 +76,11 @@ DEFAULT_ALLOWED_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 )
+DEPTH_ARTIFACT_FILE_EXTENSION = ".npy"
+DEPTH_ARTIFACT_DIRECTORY_PREFIX = "dataset-"
 
 DetectorFactory = Callable[[Path], ObjectDetector]
+DepthEstimatorFactory = Callable[[Path], DepthEstimator]
 
 
 def build_service_payload() -> dict[str, str]:
@@ -113,6 +131,68 @@ def clip_detection_bbox(
 
 def default_detector_factory(model_path: Path) -> ObjectDetector:
     return UltralyticsObjectDetector(model_path)
+
+
+def default_depth_estimator_factory(model_path: Path) -> DepthEstimator:
+    return MidasDepthEstimator(model_path)
+
+
+def validate_depth_prediction(
+    prediction: DepthPrediction,
+    *,
+    image_width: int,
+    image_height: int,
+) -> np.ndarray:
+    depth_map = np.asarray(prediction.depth_map, dtype=np.float32)
+    if depth_map.ndim != 2:
+        raise ValueError("Depth output must be a single-channel map.")
+
+    depth_height, depth_width = depth_map.shape
+    if depth_width != image_width or depth_height != image_height:
+        raise ValueError(
+            "Depth output dimensions "
+            f"{depth_width}x{depth_height} did not match source image dimensions "
+            f"{image_width}x{image_height}."
+        )
+
+    if not np.isfinite(depth_map).any():
+        raise ValueError("Depth output did not contain any finite values.")
+
+    return depth_map
+
+
+def build_depth_artifact_uri(
+    *,
+    dataset_id: int,
+    frame_id: str,
+    run_id: int,
+) -> str:
+    safe_frame_id = frame_id.replace("/", "_").replace("\\", "_")
+    return (
+        Path(f"{DEPTH_ARTIFACT_DIRECTORY_PREFIX}{dataset_id}")
+        / safe_frame_id
+        / f"run-{run_id}{DEPTH_ARTIFACT_FILE_EXTENSION}"
+    ).as_posix()
+
+
+def persist_depth_artifact(
+    *,
+    depth_artifacts_directory: Path,
+    dataset_id: int,
+    frame_id: str,
+    run_id: int,
+    depth_map: np.ndarray,
+) -> str:
+    depth_uri = build_depth_artifact_uri(
+        dataset_id=dataset_id,
+        frame_id=frame_id,
+        run_id=run_id,
+    )
+    artifact_path = depth_artifacts_directory / depth_uri
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(artifact_path, depth_map.astype(np.float32, copy=False))
+
+    return depth_uri
 
 
 def validate_bbox_coordinates(
@@ -242,9 +322,39 @@ def build_correction_response_record(
     )
 
 
-def create_app(detector_factory: DetectorFactory | None = None) -> FastAPI:
+def build_frame_depth_artifact_response(
+    *,
+    frame_id: str,
+    state: str,
+    detail: str | None,
+    run_record: dict[str, object] | None,
+    artifact_record: dict[str, object] | None,
+) -> FrameDepthArtifactResponse:
+    return FrameDepthArtifactResponse(
+        frame_id=frame_id,
+        state=state,
+        detail=detail,
+        run=(
+            InferenceRunRecord.model_validate(run_record)
+            if run_record is not None
+            else None
+        ),
+        artifact=(
+            DepthArtifactRecord.model_validate(artifact_record)
+            if artifact_record is not None
+            else None
+        ),
+    )
+
+
+def create_app(
+    detector_factory: DetectorFactory | None = None,
+    depth_estimator_factory: DepthEstimatorFactory | None = None,
+) -> FastAPI:
     database_path = resolve_database_path()
     initialize_database(database_path)
+    depth_artifacts_directory = resolve_depth_artifacts_directory()
+    depth_artifacts_directory.mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(
         title="Geospatial Scene ML API",
@@ -260,6 +370,10 @@ def create_app(detector_factory: DetectorFactory | None = None) -> FastAPI:
     )
     app.state.database_path = database_path
     app.state.detector_factory = detector_factory or default_detector_factory
+    app.state.depth_estimator_factory = (
+        depth_estimator_factory or default_depth_estimator_factory
+    )
+    app.state.depth_artifacts_directory = depth_artifacts_directory
 
     @app.get("/", status_code=HTTPStatus.OK)
     async def read_root() -> dict[str, str]:
@@ -382,6 +496,175 @@ def create_app(detector_factory: DetectorFactory | None = None) -> FastAPI:
         )
 
     @app.post(
+        "/datasets/{dataset_id}/frames/{frame_id}/depth",
+        response_model=FrameDepthArtifactResponse,
+        status_code=HTTPStatus.CREATED,
+    )
+    async def trigger_depth_inference(
+        dataset_id: int,
+        frame_id: str,
+        request: DepthRunRequest | None = None,
+    ) -> FrameDepthArtifactResponse:
+        resolved_request = request or DepthRunRequest()
+        model_path = (
+            Path(resolved_request.model_path).resolve()
+            if resolved_request.model_path
+            else resolve_default_depth_model_path()
+        )
+        started_at = utc_now_isoformat()
+        processed_frame_count = 0
+
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                frame_record = repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+            run_record = repository.create_inference_run(
+                dataset_id=dataset_id,
+                run_type=DEPTH_RUN_TYPE,
+                frame_id=frame_id,
+                status=RUN_STATUS_RUNNING,
+                model_name=model_path.stem,
+                model_path=str(model_path),
+                frame_count=1,
+                started_at=started_at,
+            )
+            depth_estimator = app.state.depth_estimator_factory(model_path)
+
+            try:
+                image_path = (
+                    Path(str(frame_record["dataset_source_path"])).resolve()
+                    / str(frame_record["image_path"])
+                )
+                prediction = depth_estimator.estimate(image_path)
+                processed_frame_count = 1
+                depth_map = validate_depth_prediction(
+                    prediction,
+                    image_width=int(frame_record["image_width"]),
+                    image_height=int(frame_record["image_height"]),
+                )
+                depth_uri = persist_depth_artifact(
+                    depth_artifacts_directory=app.state.depth_artifacts_directory,
+                    dataset_id=dataset_id,
+                    frame_id=frame_id,
+                    run_id=int(run_record["id"]),
+                    depth_map=depth_map,
+                )
+                artifact_record = repository.save_depth_artifact(
+                    dataset_id=dataset_id,
+                    frame_id=frame_id,
+                    inference_run_id=int(run_record["id"]),
+                    depth_uri=depth_uri,
+                    width=int(frame_record["image_width"]),
+                    height=int(frame_record["image_height"]),
+                    depth_format=prediction.depth_format,
+                    depth_scale=prediction.depth_scale,
+                    created_at=utc_now_isoformat(),
+                )
+                completed_run_record = repository.finalize_inference_run(
+                    run_id=int(run_record["id"]),
+                    status=RUN_STATUS_COMPLETED,
+                    processed_frame_count=processed_frame_count,
+                    detection_count=0,
+                    completed_at=utc_now_isoformat(),
+                    detections=[],
+                )
+            except Exception as error:
+                failed_run_record = repository.mark_inference_run_failed(
+                    run_id=int(run_record["id"]),
+                    processed_frame_count=processed_frame_count,
+                    completed_at=utc_now_isoformat(),
+                    error_message=str(error),
+                )
+                return build_frame_depth_artifact_response(
+                    frame_id=frame_id,
+                    state=DEPTH_ARTIFACT_STATE_FAILED,
+                    detail=str(error),
+                    run_record=failed_run_record,
+                    artifact_record=None,
+                )
+
+        return build_frame_depth_artifact_response(
+            frame_id=frame_id,
+            state=DEPTH_ARTIFACT_STATE_COMPLETED,
+            detail=None,
+            run_record=completed_run_record,
+            artifact_record=artifact_record,
+        )
+
+    @app.get(
+        "/datasets/{dataset_id}/frames/{frame_id}/depth",
+        response_model=FrameDepthArtifactResponse,
+        status_code=HTTPStatus.OK,
+    )
+    async def get_frame_depth_artifact(
+        dataset_id: int,
+        frame_id: str,
+    ) -> FrameDepthArtifactResponse:
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+            try:
+                run_record = repository.get_latest_inference_run_for_frame(
+                    dataset_id,
+                    frame_id,
+                    DEPTH_RUN_TYPE,
+                )
+            except KeyError:
+                return build_frame_depth_artifact_response(
+                    frame_id=frame_id,
+                    state=DEPTH_ARTIFACT_STATE_MISSING,
+                    detail="No depth artifact has been generated for this frame yet.",
+                    run_record=None,
+                    artifact_record=None,
+                )
+
+            artifact_record = repository.get_depth_artifact_for_run(
+                inference_run_id=int(run_record["id"]),
+                frame_id=frame_id,
+            )
+
+        run_status = str(run_record["status"])
+        if artifact_record is None:
+            if run_status == RUN_STATUS_RUNNING:
+                state = DEPTH_ARTIFACT_STATE_RUNNING
+                detail = "Depth inference is still running for this frame."
+            elif run_status == RUN_STATUS_FAILED:
+                state = DEPTH_ARTIFACT_STATE_FAILED
+                detail = str(run_record["error_message"] or "Depth inference failed.")
+            else:
+                state = DEPTH_ARTIFACT_STATE_MISSING
+                detail = "The latest depth run did not persist an artifact."
+
+            return build_frame_depth_artifact_response(
+                frame_id=frame_id,
+                state=state,
+                detail=detail,
+                run_record=run_record,
+                artifact_record=None,
+            )
+
+        return build_frame_depth_artifact_response(
+            frame_id=frame_id,
+            state=DEPTH_ARTIFACT_STATE_COMPLETED,
+            detail=None,
+            run_record=run_record,
+            artifact_record=artifact_record,
+        )
+
+    @app.post(
         "/datasets/{dataset_id}/runs/detect",
         response_model=DetectionRunResponse,
         status_code=HTTPStatus.CREATED,
@@ -413,6 +696,7 @@ def create_app(detector_factory: DetectorFactory | None = None) -> FastAPI:
             run_record = repository.create_inference_run(
                 dataset_id=dataset_id,
                 run_type=DETECTION_RUN_TYPE,
+                frame_id=None,
                 status=RUN_STATUS_RUNNING,
                 model_name=model_path.stem,
                 model_path=str(model_path),

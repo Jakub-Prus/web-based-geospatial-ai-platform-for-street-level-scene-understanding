@@ -1,6 +1,6 @@
 # 07. Data Model
 
-Status: Updated after Slice 8
+Status: Updated after Slice 10
 
 ## Core Entities
 
@@ -45,6 +45,7 @@ Status: Updated after Slice 8
 
 - id
 - dataset_id
+- optional frame_id
 - model_version_id
 - run_type
 - status
@@ -103,6 +104,7 @@ Status: Updated after Slice 8
 - One dataset has many inference runs.
 - One inference run has many detections.
 - One inference run can have many depth artifacts.
+- In the current Slice 10 implementation, depth inference runs are frame-scoped and store `frame_id` on `inference_runs`.
 - One depth artifact can produce one or more point-cloud artifacts.
 - In the current Slice 8 implementation, one detection can have zero or one active correction record.
 - The original model detection remains stored separately in `detections`, so review can return both original and corrected state without mutating the model output row.
@@ -113,3 +115,4 @@ Status: Updated after Slice 8
 - Geospatial coordinates and derived geometry should live in PostGIS-enabled columns.
 - Large binary assets such as images, masks, depth maps, and point clouds should live in object storage, with database references.
 - The current local MVP stores detection and correction bounding boxes as explicit numeric columns so the overlay and correction flows stay simple in SQLite.
+- The current local MVP stores depth artifact metadata in SQLite and writes the artifact payload itself as a local `.npy` file, with `frames.depth_path` caching the latest stored artifact URI for the frame.

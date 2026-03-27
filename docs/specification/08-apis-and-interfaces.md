@@ -1,6 +1,6 @@
 # 08. APIs And Interfaces
 
-Status: Updated for implemented Slices 3-9
+Status: Updated for implemented Slices 3-10
 
 ## FastAPI Surface Implemented Today
 
@@ -37,6 +37,15 @@ The frame-corrections endpoint defaults to the latest detection run for the data
 
 The Slice 9 frontend consumes both correction endpoints to load effective detection state for a selected frame and then saves one edited detection at a time after clipping the box to image bounds.
 
+### Depth Endpoints
+
+- `POST /datasets/{dataset_id}/frames/{frame_id}/depth`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/depth`
+
+The POST depth endpoint runs MiDaS inference for one selected frame, persists one depth artifact when validation succeeds, and still records a frame-scoped failed run when inference or dimension validation fails.
+
+The GET depth endpoint returns a `missing`, `running`, `completed`, or `failed` state plus optional run and artifact metadata so later UI slices can render a clear fallback instead of assuming a depth artifact exists.
+
 ## Thin .NET Bridge Surface
 
 The bridge remains intentionally small in Slice 5:
@@ -48,7 +57,7 @@ The bridge remains intentionally small in Slice 5:
 
 These interfaces remain planned but are not implemented yet:
 
-- depth and point-cloud endpoints
+- point-cloud endpoints
 - metrics endpoints
 - export endpoints
 
@@ -56,8 +65,10 @@ These interfaces remain planned but are not implemented yet:
 
 - FastAPI is the client-facing backend for the current MVP slices.
 - Detection runs include explicit run type, model version, processing counts, and status.
+- Depth runs reuse the shared run metadata model and add optional frame scope through `run.frame_id`.
 - Detection payloads remain stable enough for replayable frontend overlays.
 - Correction payloads preserve original model detections and never overwrite raw detection rows.
+- Depth payloads expose width, height, `depth_format`, and `depth_scale` so later 3D slices do not need to infer artifact semantics from file names.
 - The .NET bridge consumes summary-level metadata only and does not duplicate FastAPI write ownership.
 
 ## Example Flow
@@ -70,7 +81,8 @@ These interfaces remain planned but are not implemented yet:
 6. Frontend requests `GET /datasets/{dataset_id}/frames/{frame_id}/corrections` to resolve effective detection state for the editor.
 7. User edits one selected box in the image viewer and the frontend clips the box to image bounds before save.
 8. Frontend posts the updated label and bounding box to `POST /datasets/{dataset_id}/frames/{frame_id}/detections/{detection_id}/correction`.
-9. Future slices add depth, 3D, metrics, and export.
+9. Frontend or a script can trigger `POST /datasets/{dataset_id}/frames/{frame_id}/depth` for one selected frame and read the current depth state through `GET /datasets/{dataset_id}/frames/{frame_id}/depth`.
+10. Future slices add point-cloud conversion, 3D rendering, metrics, and export.
 
 ## Required Payload Contracts
 
@@ -78,9 +90,11 @@ These interfaces remain planned but are not implemented yet:
 - Detection records include frame id, class label, confidence, and bounding box in image pixel space.
 - Bounding boxes remain in `x_min`, `y_min`, `x_max`, `y_max` image coordinates until the frontend scales them for display.
 - Correction records include review status plus separate original, corrected, and effective detection state.
+- Depth artifact records include `depth_uri`, `width`, `height`, `depth_format`, and `depth_scale`, and the backend rejects artifacts whose stored shape does not match the source frame dimensions.
 
 ## External Integrations
 
 - local file-backed dataset storage for the current demo slices
 - Ultralytics YOLO weights for detection
+- MiDaS `dpt_swin2_tiny_256.pt` weights plus the official MiDaS model code path for depth
 - optional map tiles or richer basemaps remain deferred

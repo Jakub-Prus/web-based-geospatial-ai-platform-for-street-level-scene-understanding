@@ -1,6 +1,6 @@
 # 10. Deployment And Tech Stack
 
-Status: Proposed v1
+Status: Updated after Slice 10
 
 ## Technology Stack
 
@@ -10,6 +10,7 @@ Status: Proposed v1
 - 3D visualization: Three.js
 - Bridge service: C# with .NET 8 Web API
 - Core backend: Python with FastAPI
+- Depth inference: MiDaS `DPT_SwinV2_T_256` with pinned `dpt_swin2_tiny_256.pt`
 - Database: PostgreSQL with PostGIS
 - Storage: S3-compatible object storage
 
@@ -19,6 +20,7 @@ Status: Proposed v1
 - Local development: Docker Compose
 - Cloud target: AWS or Azure
 - Minimal Kubernetes deployment sketch after MVP, even if full rollout is not implemented
+- The FastAPI image now pre-caches the official MiDaS repository code so the local depth backend does not need to fetch model code on first request inside Docker
 
 ## CI/CD
 

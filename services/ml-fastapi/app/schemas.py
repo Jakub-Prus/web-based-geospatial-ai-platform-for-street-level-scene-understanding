@@ -9,6 +9,10 @@ REVIEW_STATUS_APPROVED = "approved"
 REVIEW_STATUS_REJECTED = "rejected"
 DETECTION_SOURCE_ORIGINAL = "original"
 DETECTION_SOURCE_CORRECTED = "corrected"
+DEPTH_ARTIFACT_STATE_MISSING = "missing"
+DEPTH_ARTIFACT_STATE_RUNNING = "running"
+DEPTH_ARTIFACT_STATE_COMPLETED = "completed"
+DEPTH_ARTIFACT_STATE_FAILED = "failed"
 
 ReviewStatus = Literal[
     REVIEW_STATUS_PENDING,
@@ -19,6 +23,12 @@ DetectionStateSource = Literal[
     DETECTION_SOURCE_ORIGINAL,
     DETECTION_SOURCE_CORRECTED,
 ]
+DepthArtifactState = Literal[
+    DEPTH_ARTIFACT_STATE_MISSING,
+    DEPTH_ARTIFACT_STATE_RUNNING,
+    DEPTH_ARTIFACT_STATE_COMPLETED,
+    DEPTH_ARTIFACT_STATE_FAILED,
+]
 
 
 class DatasetLoadRequest(BaseModel):
@@ -28,6 +38,10 @@ class DatasetLoadRequest(BaseModel):
 
 
 class DetectionRunRequest(BaseModel):
+    model_path: str | None = None
+
+
+class DepthRunRequest(BaseModel):
     model_path: str | None = None
 
 
@@ -127,6 +141,7 @@ class InferenceRunRecord(BaseModel):
     id: int
     dataset_id: int
     run_type: str
+    frame_id: str | None = None
     status: str
     model_name: str
     model_path: str
@@ -140,6 +155,26 @@ class InferenceRunRecord(BaseModel):
 
 class DetectionRunResponse(BaseModel):
     run: InferenceRunRecord
+
+
+class DepthArtifactRecord(BaseModel):
+    id: int
+    inference_run_id: int
+    frame_id: str
+    depth_uri: str
+    depth_format: str
+    width: int
+    height: int
+    depth_scale: float
+    created_at: str
+
+
+class FrameDepthArtifactResponse(BaseModel):
+    frame_id: str
+    state: DepthArtifactState
+    detail: str | None = None
+    run: InferenceRunRecord | None = None
+    artifact: DepthArtifactRecord | None = None
 
 
 class DetectionRecord(BaseModel):

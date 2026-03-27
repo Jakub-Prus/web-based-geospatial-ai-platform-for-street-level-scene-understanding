@@ -1,8 +1,8 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 9 annotation-editing workspace for the planned geospatial AI demo platform.
+Slice 10 depth-artifact workspace for the planned geospatial AI demo platform.
 
-Slices `0` through `9` are now implemented:
+Slices `0` through `10` are now implemented:
 
 - dataset contract and geometry contract are frozen
 - React, FastAPI, and .NET service skeletons are in place
@@ -13,6 +13,7 @@ Slices `0` through `9` are now implemented:
 - stored detections render in the frontend image viewer with run-state feedback
 - human review corrections are persisted separately from original detections in FastAPI
 - one selected detection can now be relabeled, moved, resized, redrawn, clipped to image bounds, and saved from the frontend
+- one selected frame can now produce a persisted depth artifact with validated source-image dimensions and clear missing-depth fallback state
 
 ## Specification Docs
 
@@ -133,6 +134,20 @@ After the stack is running and the subset exists, load it through FastAPI:
 curl -X POST http://localhost:8000/datasets/load \
   -H "Content-Type: application/json" \
   -d '{}'
+```
+
+Trigger one Slice 10 depth artifact for a selected frame:
+
+```bash
+curl -X POST http://localhost:8000/datasets/{dataset_id}/frames/{frame_id}/depth \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Check the current depth state for a frame:
+
+```bash
+curl http://localhost:8000/datasets/{dataset_id}/frames/{frame_id}/depth
 ```
 
 ### 5. Run services outside Docker
@@ -268,6 +283,30 @@ The editor now supports:
 
 Saved edits post to the existing Slice 8 correction endpoint and update the effective detection state without overwriting the original model output.
 
+## Slice 10 Depth Artifact Backend
+
+FastAPI now supports one frame-scoped depth inference run backed by `data/raw/models/dpt_swin2_tiny_256.pt`.
+
+The service uses the official MiDaS `DPT_SwinV2_T_256` architecture with the pinned local weight file and persists each successful artifact as a local `.npy` file containing single-channel float32 inverse-depth values.
+
+Depth endpoints:
+
+- `POST /datasets/{dataset_id}/frames/{frame_id}/depth`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/depth`
+
+The depth response returns a clear `missing`, `running`, `completed`, or `failed` state plus the latest frame-scoped run metadata and optional artifact metadata.
+
+Each stored artifact includes:
+
+- `frame_id`
+- `depth_uri`
+- `width`
+- `height`
+- `depth_format`
+- `depth_scale`
+
+The backend validates the persisted depth map shape against the source image dimensions before saving and updates the frame record with the latest stored `depth_path`.
+
 ## Local Verification
 
 Frontend checks:
@@ -289,6 +328,16 @@ source .venv/bin/activate
 python -m pytest --cov=app --cov-report=term-missing
 ```
 
-The current FastAPI suite passes at `87%` total coverage, including Slice 8 correction persistence and reload-regression coverage.
+The current FastAPI suite passes at `84%` total coverage, including Slice 10 depth-artifact success, dimension-mismatch, and missing-depth fallback coverage.
+
+Slice 10 real-asset verification:
+
+- dataset: `data/raw/a2d2-subset/`
+- model: `data/raw/models/dpt_swin2_tiny_256.pt`
+- verified frame: `20190401121727_camera_frontright_000013460`
+- stored artifact: `services/ml-fastapi/data/slice10-verify-depth/dataset-1/20190401121727_camera_frontright_000013460/run-1.npy`
+- source dimensions: `1920x1208`
+- stored array shape: `1208x1920`
+- result: stored depth artifact dimensions match the source image dimensions exactly
 
 .NET bridge tests require a local `.NET` SDK, not just the runtime. In the current environment `dotnet.exe` is present, but `dotnet --list-sdks` returns no installed SDKs.

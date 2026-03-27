@@ -1,6 +1,6 @@
 # 13. Implementation Roadmap
 
-Status: Updated after Slice 9
+Status: Updated after Slice 10
 
 ## Current Progress
 
@@ -16,10 +16,11 @@ Completed slices:
 - Slice 7: detection overlay UI
 - Slice 8: correction persistence backend
 - Slice 9: annotation editing UI
+- Slice 10: depth artifact backend
 
 Next planned slice:
 
-- Slice 10: depth artifact backend
+- Slice 11: point-cloud conversion
 
 ## Planning Assumptions
 
@@ -187,6 +188,9 @@ Day 3 annotation review is now implemented through Slice 9 for the focused MVP p
 - A selected frame can be inspected in 2D and 3D
 - Monitoring view shows real values from the dataset and corrections
 - The point-cloud output is visually coherent and stable for the demo dataset
+
+Status note:
+Day 4 is now partially complete in the current repository state. Slice 10 persists one validated depth artifact per selected frame with clear missing-depth and failed-run fallback states; point-cloud conversion, 3D rendering, and monitoring remain for the next slices.
 
 ## Day 5: Export, Failure Handling, And Demo Polish
 

@@ -1,6 +1,6 @@
 # 15. Scene Geometry Contract
 
-Status: Proposed v1
+Status: Updated after Slice 10
 
 ## Purpose
 
@@ -55,6 +55,12 @@ Recommended formats:
 
 - single-channel float depth map
 - normalized depth image with documented scale conversion
+
+Current Slice 10 implementation:
+
+- Stores one local `float32_npy_inverse_depth` artifact per selected frame.
+- Persists `depth_scale = 1.0` because the saved MiDaS output remains a relative inverse-depth signal, not a metric distance map.
+- Validates the stored array shape against the source `image_width` and `image_height` before persistence.
 
 ## Point-Cloud Conversion Contract
 

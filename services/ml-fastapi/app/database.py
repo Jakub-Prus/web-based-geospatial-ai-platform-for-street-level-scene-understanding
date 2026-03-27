@@ -8,9 +8,12 @@ FRAMES_TABLE_NAME = "frames"
 INFERENCE_RUNS_TABLE_NAME = "inference_runs"
 DETECTIONS_TABLE_NAME = "detections"
 CORRECTIONS_TABLE_NAME = "corrections"
+DEPTH_ARTIFACTS_TABLE_NAME = "depth_artifacts"
 FRAME_UNIQUE_INDEX_NAME = "idx_frames_dataset_id_frame_id"
+INFERENCE_RUNS_FRAME_INDEX_NAME = "idx_inference_runs_dataset_id_run_type_frame_id"
 LEGACY_FRAME_PRIMARY_KEY_COLUMN = "frame_id"
 FRAME_PRIMARY_KEY_COLUMN = "id"
+INFERENCE_RUN_FRAME_ID_COLUMN = "frame_id"
 
 
 def create_connection(database_path: Path) -> sqlite3.Connection:
@@ -67,6 +70,7 @@ def initialize_database(database_path: Path) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 dataset_id INTEGER NOT NULL,
                 run_type TEXT NOT NULL,
+                frame_id TEXT,
                 status TEXT NOT NULL,
                 model_name TEXT NOT NULL,
                 model_path TEXT NOT NULL,
@@ -121,11 +125,40 @@ def initialize_database(database_path: Path) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_corrections_detection_id
             ON {CORRECTIONS_TABLE_NAME}(detection_id);
+
+            CREATE TABLE IF NOT EXISTS {DEPTH_ARTIFACTS_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inference_run_id INTEGER NOT NULL,
+                frame_id TEXT NOT NULL,
+                depth_uri TEXT NOT NULL,
+                depth_format TEXT NOT NULL,
+                width INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                depth_scale REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (inference_run_id) REFERENCES {INFERENCE_RUNS_TABLE_NAME}(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_depth_artifacts_inference_run_id
+            ON {DEPTH_ARTIFACTS_TABLE_NAME}(inference_run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_depth_artifacts_frame_id
+            ON {DEPTH_ARTIFACTS_TABLE_NAME}(frame_id);
             """
         )
 
+        if _inference_runs_table_requires_frame_id_migration(connection):
+            _add_frame_id_to_inference_runs_table(connection)
+
         if _frames_table_requires_migration(connection):
             _migrate_legacy_frames_table(connection)
+
+        connection.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS {INFERENCE_RUNS_FRAME_INDEX_NAME}
+            ON {INFERENCE_RUNS_TABLE_NAME}(dataset_id, run_type, frame_id)
+            """
+        )
 
 
 def _frames_table_requires_migration(connection: sqlite3.Connection) -> bool:
@@ -138,6 +171,29 @@ def _frames_table_requires_migration(connection: sqlite3.Connection) -> bool:
     )
 
     return frame_primary_key_column == LEGACY_FRAME_PRIMARY_KEY_COLUMN
+
+
+def _inference_runs_table_requires_frame_id_migration(
+    connection: sqlite3.Connection,
+) -> bool:
+    inference_run_columns = connection.execute(
+        f"PRAGMA table_info({INFERENCE_RUNS_TABLE_NAME})"
+    ).fetchall()
+    return not any(
+        row["name"] == INFERENCE_RUN_FRAME_ID_COLUMN for row in inference_run_columns
+    )
+
+
+def _add_frame_id_to_inference_runs_table(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        f"""
+        ALTER TABLE {INFERENCE_RUNS_TABLE_NAME}
+        ADD COLUMN {INFERENCE_RUN_FRAME_ID_COLUMN} TEXT;
+
+        CREATE INDEX IF NOT EXISTS {INFERENCE_RUNS_FRAME_INDEX_NAME}
+        ON {INFERENCE_RUNS_TABLE_NAME}(dataset_id, run_type, frame_id);
+        """
+    )
 
 
 def _migrate_legacy_frames_table(connection: sqlite3.Connection) -> None:

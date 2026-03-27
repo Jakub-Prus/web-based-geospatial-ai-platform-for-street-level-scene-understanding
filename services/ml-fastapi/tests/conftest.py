@@ -5,7 +5,6 @@ import os
 import tarfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -88,6 +87,26 @@ def _create_preview_archive(archive_path: Path, sequence_id: str) -> None:
         )
 
 
+def load_sample_dataset(
+    client: TestClient,
+    sample_dataset: tuple[Path, Path],
+    *,
+    dataset_name: str = "test-dataset",
+) -> int:
+    dataset_path, preview_archive_path = sample_dataset
+    response = client.post(
+        "/datasets/load",
+        json={
+            "dataset_path": str(dataset_path),
+            "preview_archive_path": str(preview_archive_path),
+            "dataset_name": dataset_name,
+        },
+    )
+
+    assert response.status_code == 201
+    return int(response.json()["dataset"]["id"])
+
+
 @pytest.fixture()
 def sample_dataset(tmp_path: Path) -> tuple[Path, Path]:
     sequence_id = "20190401_121727"
@@ -123,13 +142,29 @@ def test_client_factory(
     clients: list[TestClient] = []
     client_count = 0
 
-    def _build_test_client(*, detector_factory=None, database_path: Path | None = None) -> TestClient:
+    def _build_test_client(
+        *,
+        detector_factory=None,
+        depth_estimator_factory=None,
+        database_path: Path | None = None,
+        depth_artifacts_directory: Path | None = None,
+    ) -> TestClient:
         nonlocal client_count
 
         resolved_database_path = database_path or tmp_path / f"test-platform-{client_count}.db"
+        resolved_depth_artifacts_directory = (
+            depth_artifacts_directory
+            or tmp_path / f"depth-artifacts-{client_count}"
+        )
         client_count += 1
         os.environ["ML_FASTAPI_DB_PATH"] = str(resolved_database_path)
-        app = create_app(detector_factory=detector_factory)
+        os.environ["ML_FASTAPI_DEPTH_ARTIFACTS_DIR"] = str(
+            resolved_depth_artifacts_directory
+        )
+        app = create_app(
+            detector_factory=detector_factory,
+            depth_estimator_factory=depth_estimator_factory,
+        )
         client = TestClient(app)
         clients.append(client)
         client.__enter__()
@@ -143,6 +178,7 @@ def test_client_factory(
         client.__exit__(None, None, None)
 
     os.environ.pop("ML_FASTAPI_DB_PATH", None)
+    os.environ.pop("ML_FASTAPI_DEPTH_ARTIFACTS_DIR", None)
 
 
 @pytest.fixture()

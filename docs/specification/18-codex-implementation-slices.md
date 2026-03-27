@@ -1,6 +1,6 @@
 # 18. Codex Implementation Slices
 
-Status: Active implementation plan, updated after Slice 9
+Status: Active implementation plan, updated after Slice 10
 
 ## Purpose
 
@@ -424,6 +424,8 @@ Current result:
 
 ## Slice 10: Depth Artifact Backend
 
+Status: Implemented
+
 ### Goal
 
 Produce one stored depth artifact per selected frame.
@@ -457,6 +459,14 @@ Produce one stored depth artifact per selected frame.
 ### Stop Condition
 
 - One frame has a valid stored depth artifact.
+
+Current result:
+
+- FastAPI persists frame-scoped depth runs backed by `data/raw/models/dpt_swin2_tiny_256.pt`.
+- Successful runs store one `float32_npy_inverse_depth` artifact per frame and update the frame record with the latest `depth_path`.
+- The backend validates stored depth width and height against the source image dimensions before persistence.
+- `GET /datasets/{dataset_id}/frames/{frame_id}/depth` returns explicit `missing`, `running`, `completed`, or `failed` state for clear fallback handling.
+- Verified Slice 10 stop condition: frame `20190401121727_camera_frontright_000013460` stores a persisted depth artifact whose `1920x1208` metadata matches the source image dimensions exactly.
 
 ## Slice 11: Point-Cloud Conversion
 

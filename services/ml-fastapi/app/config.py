@@ -11,8 +11,10 @@ REPO_ROOT = SERVICES_DIR.parent
 DEFAULT_DATASET_PATH = REPO_ROOT / "data" / "raw" / "a2d2-subset"
 DEFAULT_PREVIEW_ARCHIVE_PATH = REPO_ROOT / "data" / "raw" / "a2d2-preview.tar"
 DEFAULT_DETECTION_MODEL_PATH = REPO_ROOT / "data" / "raw" / "models" / "yolo11n.pt"
+DEFAULT_DEPTH_MODEL_PATH = REPO_ROOT / "data" / "raw" / "models" / "dpt_swin2_tiny_256.pt"
 DEFAULT_DB_DIRECTORY = SERVICE_DIR / "data"
 DEFAULT_DB_PATH = DEFAULT_DB_DIRECTORY / "platform.db"
+DEFAULT_DEPTH_ARTIFACTS_DIRECTORY = DEFAULT_DB_DIRECTORY / "depth-artifacts"
 
 
 def resolve_database_path() -> Path:
@@ -45,3 +47,19 @@ def resolve_default_detection_model_path() -> Path:
         return Path(configured_path).resolve()
 
     return DEFAULT_DETECTION_MODEL_PATH
+
+
+def resolve_default_depth_model_path() -> Path:
+    configured_path = os.getenv("MIDAS_DEPTH_MODEL_PATH")
+    if configured_path:
+        return Path(configured_path).resolve()
+
+    return DEFAULT_DEPTH_MODEL_PATH
+
+
+def resolve_depth_artifacts_directory() -> Path:
+    configured_path = os.getenv("ML_FASTAPI_DEPTH_ARTIFACTS_DIR")
+    if configured_path:
+        return Path(configured_path).resolve()
+
+    return DEFAULT_DEPTH_ARTIFACTS_DIRECTORY

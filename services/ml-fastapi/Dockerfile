@@ -19,6 +19,9 @@ RUN apt-get update \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Cache the official MiDaS repository code used by the local depth model loader.
+RUN python -c "import torch; torch.hub.load('isl-org/MiDaS', 'DPT_SwinV2_T_256', pretrained=False, trust_repo=True)"
+
 COPY app ./app
 
 EXPOSE 8000
