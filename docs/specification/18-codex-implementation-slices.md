@@ -766,6 +766,8 @@ Implement:
 Keep bbox handling in image pixel coordinates as defined in the dataset contract.
 Do not implement editing tools yet.
 Verify that one frame can be visually inspected with correct overlays and useful empty states.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 8 Prompt
@@ -781,6 +783,8 @@ Add:
 - original versus corrected state handling
 Do not implement box drawing or editing UI yet.
 Verify that one detection can be corrected and the correction survives reload while the original detection remains recoverable.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 9 Prompt
@@ -797,6 +801,8 @@ Implement:
 Clip boxes to image bounds and preserve x_min, y_min, x_max, y_max semantics.
 Do not add polygon tools or batch editing.
 Verify that a user can visually edit one box and save it successfully.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 10 Prompt
@@ -812,6 +818,8 @@ Implement:
 - missing-depth fallback
 Do not implement point-cloud conversion or 3D rendering yet.
 Verify that one frame gets a valid stored depth artifact matching the source image dimensions.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 11 Prompt
@@ -826,6 +834,8 @@ Implement point-cloud conversion from stored depth:
 - point-cloud artifact storage or streaming
 Do not implement advanced rendering polish or multi-frame registration.
 Verify that one frame returns a stable point-cloud payload in the agreed coordinate system.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 12 Prompt
@@ -841,6 +851,8 @@ Implement:
 - empty or failed 3D state
 Do not implement global scene merge or advanced shader work.
 Verify that a selected frame can be inspected interactively in 3D.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 13 Prompt
@@ -856,6 +868,8 @@ Implement:
 Add only the APIs and UI needed for these summary metrics.
 Do not implement advanced time-series dashboards or model comparison.
 Verify that metrics change after runs and after corrections.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 14 Prompt
@@ -869,6 +883,8 @@ Implement:
 - one frontend export trigger
 Do not add multiple formats or async export jobs unless strictly necessary.
 Verify that corrected detections can be downloaded and that the export matches stored corrections.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
 
 ### Slice 15 Prompt
@@ -890,4 +906,6 @@ Explicitly handle:
 - missing point cloud
 Do not expand core architecture at this stage.
 Verify that the demo can be run from the docs alone and explained clearly.
+Update all of the docuemntation based on the changes and things found in the project.
+Verify test coverage and commit and push.
 ```
