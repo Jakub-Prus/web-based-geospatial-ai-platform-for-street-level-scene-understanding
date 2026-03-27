@@ -34,6 +34,9 @@ External sources and downloaded model assets are frozen before implementation in
 For the standard local setup, install:
 
 - Docker Desktop with `docker compose`
+- `bash`
+- `curl`
+- `tar`
 
 If you want to run the apps outside containers for development, also install:
 
@@ -41,21 +44,41 @@ If you want to run the apps outside containers for development, also install:
 - Python 3.12
 - .NET 8 SDK
 
-### 1. Create local environment overrides
+### 1. One-command bootstrap
+
+To create `.env`, download the pinned assets, extract the default A2D2 subset when needed, start Docker Compose, wait for the services, and load the dataset automatically, run:
+
+```bash
+bash ./scripts/start_local.sh
+```
+
+The script is idempotent for the normal local workflow:
+
+- it reuses an existing `.env`
+- it skips downloads for files already present in `data/raw/`
+- it skips extraction when `data/raw/a2d2-subset/` already contains files
+- it starts the stack in detached mode
+- it finishes by calling `POST /datasets/load`
+
+On a fresh machine, the first run can take a while because it may download the pinned model files and the `a2d2-preview.tar` archive before extracting the subset.
+
+Use the manual steps below if you want to troubleshoot or run only part of the setup.
+
+### 2. Create local environment overrides
 
 Copy the example environment file before starting the stack:
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env
 ```
 
 The defaults in [`.env.example`](.env.example) are enough for a first run. Edit `.env` only if you need different ports, credentials, or service URLs.
 
-### 2. Start the full stack with Docker
+### 3. Start the full stack with Docker
 
 From the repository root, run:
 
-```powershell
+```bash
 docker compose up --build
 ```
 
@@ -73,43 +96,45 @@ Core endpoints after startup:
 
 Stop the stack with:
 
-```powershell
+```bash
 docker compose down
 ```
 
-### 3. Prepare local data assets
+### 4. Prepare local data assets
 
 The runtime starts without seeded data, but the dataset and detection flows expect assets under `data/raw/`.
 
 Download the pinned model files:
 
-```powershell
-.\scripts\download_external_assets.ps1
+```bash
+pwsh ./scripts/download_external_assets.ps1
 ```
 
 If you also want the A2D2 preview archive needed for local dataset extraction, include the optional flag:
 
-```powershell
-.\scripts\download_external_assets.ps1 -DownloadA2D2Preview
+```bash
+pwsh ./scripts/download_external_assets.ps1 -DownloadA2D2Preview
 ```
 
 Extract a small local subset from the preview archive:
 
-```powershell
-.\scripts\extract_a2d2_subset.ps1
+```bash
+pwsh ./scripts/extract_a2d2_subset.ps1
 ```
 
 After the stack is running and the subset exists, load it through FastAPI:
 
-```powershell
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/datasets/load -ContentType "application/json" -Body "{}"
+```bash
+curl -X POST http://localhost:8000/datasets/load \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```
 
-### 4. Run services outside Docker
+### 5. Run services outside Docker
 
 If you prefer live-reload development, start the infrastructure services first:
 
-```powershell
+```bash
 docker compose up postgis object-storage
 ```
 
@@ -117,31 +142,31 @@ Then run each app in a separate terminal.
 
 Frontend:
 
-```powershell
-Set-Location frontend
-$env:VITE_FASTAPI_BASE_URL="http://localhost:8000"
-$env:VITE_BRIDGE_BASE_URL="http://localhost:8080"
-$env:VITE_OBJECT_STORAGE_CONSOLE_URL="http://localhost:9001"
+```bash
+cd frontend
+export VITE_FASTAPI_BASE_URL="http://localhost:8000"
+export VITE_BRIDGE_BASE_URL="http://localhost:8080"
+export VITE_OBJECT_STORAGE_CONSOLE_URL="http://localhost:9001"
 npm ci
 npm run dev -- --port 3000
 ```
 
 FastAPI:
 
-```powershell
-Set-Location services/ml-fastapi
+```bash
+cd services/ml-fastapi
 python -m venv .venv
-. .\.venv\Scripts\Activate.ps1
+source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 .NET bridge:
 
-```powershell
-Set-Location services/bridge-dotnet
-$env:ASPNETCORE_URLS="http://localhost:8080"
-$env:MLApi__BaseUrl="http://localhost:8000"
+```bash
+cd services/bridge-dotnet
+export ASPNETCORE_URLS="http://localhost:8080"
+export MLApi__BaseUrl="http://localhost:8000"
 dotnet restore
 dotnet run
 ```
@@ -208,7 +233,7 @@ Editing tools are intentionally deferred to Slice 9.
 
 Frontend checks:
 
-```powershell
+```bash
 cd frontend
 npm install
 npm test
@@ -219,9 +244,10 @@ Frontend coverage currently runs through Vitest with V8 coverage and exercises t
 
 FastAPI checks:
 
-```powershell
+```bash
 cd services/ml-fastapi
-.\.venv\Scripts\python.exe -m pytest --cov=app --cov-report=term-missing
+source .venv/bin/activate
+python -m pytest --cov=app --cov-report=term-missing
 ```
 
 The current FastAPI suite passes at `87%` total coverage.

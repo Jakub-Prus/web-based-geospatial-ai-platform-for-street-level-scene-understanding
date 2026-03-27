@@ -31,6 +31,8 @@ services:
       postgis:
         condition: service_healthy
     environment:
+      A2D2_PREVIEW_ARCHIVE_PATH: ${A2D2_PREVIEW_ARCHIVE_PATH:-/data/raw/a2d2-preview.tar}
+      A2D2_SUBSET_PATH: ${A2D2_SUBSET_PATH:-/data/raw/a2d2-subset}
       APP_ENV: ${APP_ENV:-docker}
       OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
       OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://object-storage:9000}
@@ -40,6 +42,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      YOLO_DETECTION_MODEL_PATH: ${YOLO_DETECTION_MODEL_PATH:-/data/raw/models/yolo11n.pt}
     healthcheck:
       test:
         [
@@ -54,6 +57,9 @@ services:
       start_period: 10s
     ports:
       - "${FASTAPI_PORT:-8000}:8000"
+    volumes:
+      - ./data/raw:/data/raw:ro
+      - ./external-assets:/external-assets:ro
 
   bridge-dotnet:
     build:
