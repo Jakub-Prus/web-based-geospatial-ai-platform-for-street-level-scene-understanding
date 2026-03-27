@@ -8,6 +8,7 @@ import numpy as np
 
 DETECTION_RUN_TYPE = "detection"
 DEPTH_RUN_TYPE = "depth"
+POINT_CLOUD_RUN_TYPE = "point_cloud"
 RUN_STATUS_RUNNING = "running"
 RUN_STATUS_COMPLETED = "completed"
 RUN_STATUS_EMPTY = "empty"

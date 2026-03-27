@@ -1,8 +1,8 @@
 # Web-Based Geospatial AI Platform for Street-Level Scene Understanding
 
-Slice 10 depth-artifact workspace for the planned geospatial AI demo platform.
+Slice 11 point-cloud conversion workspace for the planned geospatial AI demo platform.
 
-Slices `0` through `10` are now implemented:
+Slices `0` through `11` are now implemented:
 
 - dataset contract and geometry contract are frozen
 - React, FastAPI, and .NET service skeletons are in place
@@ -14,6 +14,7 @@ Slices `0` through `10` are now implemented:
 - human review corrections are persisted separately from original detections in FastAPI
 - one selected detection can now be relabeled, moved, resized, redrawn, clipped to image bounds, and saved from the frontend
 - one selected frame can now produce a persisted depth artifact with validated source-image dimensions and clear missing-depth fallback state
+- one selected frame can now return a stable stored point-cloud payload in a documented local camera coordinate system
 
 ## Specification Docs
 
@@ -148,6 +149,20 @@ Check the current depth state for a frame:
 
 ```bash
 curl http://localhost:8000/datasets/{dataset_id}/frames/{frame_id}/depth
+```
+
+Trigger one Slice 11 point-cloud payload from the latest stored depth artifact:
+
+```bash
+curl -X POST http://localhost:8000/datasets/{dataset_id}/frames/{frame_id}/point-cloud \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Check the current point-cloud state and inline payload for a frame:
+
+```bash
+curl http://localhost:8000/datasets/{dataset_id}/frames/{frame_id}/point-cloud
 ```
 
 ### 5. Run services outside Docker
@@ -307,6 +322,39 @@ Each stored artifact includes:
 
 The backend validates the persisted depth map shape against the source image dimensions before saving and updates the frame record with the latest stored `depth_path`.
 
+## Slice 11 Point-Cloud Conversion
+
+FastAPI now supports deterministic point-cloud conversion from the latest stored depth artifact for one selected frame.
+
+Point-cloud endpoints:
+
+- `POST /datasets/{dataset_id}/frames/{frame_id}/point-cloud`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud`
+
+The backend reads the latest stored inverse-depth `.npy`, filters invalid values, converts pixel centers into a right-handed local camera coordinate system, and persists one compressed `.npz` artifact containing an `Nx3` float32 `points` array.
+
+The chosen coordinate convention is:
+
+- `+X` right
+- `+Y` up
+- `+Z` forward
+
+Each point-cloud artifact includes:
+
+- `point_cloud_uri`
+- `point_format`
+- `coordinate_system`
+- `source_point_count`
+- `point_count`
+- `subsample_step`
+- `intrinsics_source`
+- `fx`
+- `fy`
+- `cx`
+- `cy`
+
+Point payload generation is deterministic for a given stored depth artifact. The service uses row-major subsampling with a default browser-safe cap of `20,000` points, and `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud` returns the latest inline sampled XYZ payload for the frame.
+
 ## Local Verification
 
 Frontend checks:
@@ -324,11 +372,10 @@ FastAPI checks:
 
 ```bash
 cd services/ml-fastapi
-source .venv/bin/activate
-python -m pytest --cov=app --cov-report=term-missing
+.\.venv\Scripts\python.exe -m pytest tests --cov=app --cov-report=term-missing
 ```
 
-The current FastAPI suite passes at `84%` total coverage, including Slice 10 depth-artifact success, dimension-mismatch, and missing-depth fallback coverage.
+The current FastAPI suite passes at `82%` total coverage, including Slice 10 depth-artifact coverage plus Slice 11 point-cloud success, deterministic payload, filtering, and missing-depth fallback coverage.
 
 Slice 10 real-asset verification:
 
@@ -339,5 +386,18 @@ Slice 10 real-asset verification:
 - source dimensions: `1920x1208`
 - stored array shape: `1208x1920`
 - result: stored depth artifact dimensions match the source image dimensions exactly
+
+Slice 11 real-asset verification:
+
+- dataset: `data/raw/a2d2-subset/`
+- verified frame: `20190401121727_camera_frontright_000013460`
+- source depth artifact: `services/ml-fastapi/data/slice10-verify-depth/dataset-1/20190401121727_camera_frontright_000013460/run-1.npy`
+- stored point-cloud artifact: `services/ml-fastapi/data/slice11-verify-point-cloud/dataset-1/20190401121727_camera_frontright_000013460/run-2.npz`
+- source valid depth pixels: `1,938,775`
+- returned point count: `19,988`
+- subsample step: `97`
+- coordinate system: `camera_local_right_handed_x_right_y_up_z_forward`
+- intrinsics source: `frame_metadata`
+- stability check: two consecutive conversions returned identical ordered XYZ payloads for the same stored depth artifact
 
 .NET bridge tests require a local `.NET` SDK, not just the runtime. In the current environment `dotnet.exe` is present, but `dotnet --list-sdks` returns no installed SDKs.

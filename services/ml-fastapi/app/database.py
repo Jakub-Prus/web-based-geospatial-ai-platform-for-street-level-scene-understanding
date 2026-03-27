@@ -9,6 +9,7 @@ INFERENCE_RUNS_TABLE_NAME = "inference_runs"
 DETECTIONS_TABLE_NAME = "detections"
 CORRECTIONS_TABLE_NAME = "corrections"
 DEPTH_ARTIFACTS_TABLE_NAME = "depth_artifacts"
+POINT_CLOUD_ARTIFACTS_TABLE_NAME = "point_cloud_artifacts"
 FRAME_UNIQUE_INDEX_NAME = "idx_frames_dataset_id_frame_id"
 INFERENCE_RUNS_FRAME_INDEX_NAME = "idx_inference_runs_dataset_id_run_type_frame_id"
 LEGACY_FRAME_PRIMARY_KEY_COLUMN = "frame_id"
@@ -144,6 +145,33 @@ def initialize_database(database_path: Path) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_depth_artifacts_frame_id
             ON {DEPTH_ARTIFACTS_TABLE_NAME}(frame_id);
+
+            CREATE TABLE IF NOT EXISTS {POINT_CLOUD_ARTIFACTS_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inference_run_id INTEGER NOT NULL,
+                frame_id TEXT NOT NULL,
+                source_depth_artifact_id INTEGER NOT NULL,
+                point_cloud_uri TEXT NOT NULL,
+                point_format TEXT NOT NULL,
+                coordinate_system TEXT NOT NULL,
+                source_point_count INTEGER NOT NULL,
+                point_count INTEGER NOT NULL,
+                subsample_step INTEGER NOT NULL,
+                intrinsics_source TEXT NOT NULL,
+                fx REAL NOT NULL,
+                fy REAL NOT NULL,
+                cx REAL NOT NULL,
+                cy REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (inference_run_id) REFERENCES {INFERENCE_RUNS_TABLE_NAME}(id) ON DELETE CASCADE,
+                FOREIGN KEY (source_depth_artifact_id) REFERENCES {DEPTH_ARTIFACTS_TABLE_NAME}(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_point_cloud_artifacts_inference_run_id
+            ON {POINT_CLOUD_ARTIFACTS_TABLE_NAME}(inference_run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_point_cloud_artifacts_frame_id
+            ON {POINT_CLOUD_ARTIFACTS_TABLE_NAME}(frame_id);
             """
         )
 

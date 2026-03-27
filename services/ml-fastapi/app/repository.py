@@ -10,6 +10,7 @@ from app.database import (
     DEPTH_ARTIFACTS_TABLE_NAME,
     FRAMES_TABLE_NAME,
     INFERENCE_RUNS_TABLE_NAME,
+    POINT_CLOUD_ARTIFACTS_TABLE_NAME,
 )
 from app.inference import RUN_STATUS_FAILED
 
@@ -614,6 +615,133 @@ class DatasetRepository:
             WHERE depth_artifacts.inference_run_id = ?
               AND depth_artifacts.frame_id = ?
             ORDER BY depth_artifacts.id DESC
+            LIMIT 1
+            """,
+            (inference_run_id, frame_id),
+        ).fetchone()
+
+        return None if row is None else dict(row)
+
+    def save_point_cloud_artifact(
+        self,
+        *,
+        inference_run_id: int,
+        frame_id: str,
+        source_depth_artifact_id: int,
+        point_cloud_uri: str,
+        point_format: str,
+        coordinate_system: str,
+        source_point_count: int,
+        point_count: int,
+        subsample_step: int,
+        intrinsics_source: str,
+        fx: float,
+        fy: float,
+        cx: float,
+        cy: float,
+        created_at: str,
+    ) -> dict[str, object]:
+        with self.connection:
+            cursor = self.connection.execute(
+                f"""
+                INSERT INTO {POINT_CLOUD_ARTIFACTS_TABLE_NAME} (
+                    inference_run_id,
+                    frame_id,
+                    source_depth_artifact_id,
+                    point_cloud_uri,
+                    point_format,
+                    coordinate_system,
+                    source_point_count,
+                    point_count,
+                    subsample_step,
+                    intrinsics_source,
+                    fx,
+                    fy,
+                    cx,
+                    cy,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    inference_run_id,
+                    frame_id,
+                    source_depth_artifact_id,
+                    point_cloud_uri,
+                    point_format,
+                    coordinate_system,
+                    source_point_count,
+                    point_count,
+                    subsample_step,
+                    intrinsics_source,
+                    fx,
+                    fy,
+                    cx,
+                    cy,
+                    created_at,
+                ),
+            )
+
+        return self.get_point_cloud_artifact(int(cursor.lastrowid))
+
+    def get_point_cloud_artifact(self, point_cloud_artifact_id: int) -> dict[str, object]:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                point_cloud_artifacts.id,
+                point_cloud_artifacts.inference_run_id,
+                point_cloud_artifacts.frame_id,
+                point_cloud_artifacts.source_depth_artifact_id,
+                point_cloud_artifacts.point_cloud_uri,
+                point_cloud_artifacts.point_format,
+                point_cloud_artifacts.coordinate_system,
+                point_cloud_artifacts.source_point_count,
+                point_cloud_artifacts.point_count,
+                point_cloud_artifacts.subsample_step,
+                point_cloud_artifacts.intrinsics_source,
+                point_cloud_artifacts.fx,
+                point_cloud_artifacts.fy,
+                point_cloud_artifacts.cx,
+                point_cloud_artifacts.cy,
+                point_cloud_artifacts.created_at
+            FROM {POINT_CLOUD_ARTIFACTS_TABLE_NAME} AS point_cloud_artifacts
+            WHERE point_cloud_artifacts.id = ?
+            """,
+            (point_cloud_artifact_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(point_cloud_artifact_id)
+
+        return dict(row)
+
+    def get_point_cloud_artifact_for_run(
+        self,
+        *,
+        inference_run_id: int,
+        frame_id: str,
+    ) -> dict[str, object] | None:
+        row = self.connection.execute(
+            f"""
+            SELECT
+                point_cloud_artifacts.id,
+                point_cloud_artifacts.inference_run_id,
+                point_cloud_artifacts.frame_id,
+                point_cloud_artifacts.source_depth_artifact_id,
+                point_cloud_artifacts.point_cloud_uri,
+                point_cloud_artifacts.point_format,
+                point_cloud_artifacts.coordinate_system,
+                point_cloud_artifacts.source_point_count,
+                point_cloud_artifacts.point_count,
+                point_cloud_artifacts.subsample_step,
+                point_cloud_artifacts.intrinsics_source,
+                point_cloud_artifacts.fx,
+                point_cloud_artifacts.fy,
+                point_cloud_artifacts.cx,
+                point_cloud_artifacts.cy,
+                point_cloud_artifacts.created_at
+            FROM {POINT_CLOUD_ARTIFACTS_TABLE_NAME} AS point_cloud_artifacts
+            WHERE point_cloud_artifacts.inference_run_id = ?
+              AND point_cloud_artifacts.frame_id = ?
+            ORDER BY point_cloud_artifacts.id DESC
             LIMIT 1
             """,
             (inference_run_id, frame_id),

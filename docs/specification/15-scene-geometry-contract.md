@@ -1,6 +1,6 @@
 # 15. Scene Geometry Contract
 
-Status: Updated after Slice 10
+Status: Updated after Slice 11
 
 ## Purpose
 
@@ -67,7 +67,7 @@ Current Slice 10 implementation:
 For each valid depth pixel:
 
 1. Convert pixel coordinates into camera-local coordinates.
-2. Apply depth scale.
+2. Convert the stored inverse-depth signal into a positive forward distance proxy.
 3. Optionally subsample points for rendering performance.
 4. Store or stream the resulting local XYZ points.
 
@@ -80,19 +80,50 @@ Recommended point fields:
 - optional `g`
 - optional `b`
 
+Current Slice 11 implementation:
+
+- Reads the latest stored `.npy` inverse-depth artifact for one selected frame.
+- Filters out non-finite, zero, and negative inverse-depth values before conversion.
+- Converts each remaining pixel center using:
+  - `u = column + 0.5`
+  - `v = row + 0.5`
+  - `z = depth_scale / inverse_depth`
+  - `x = ((u - cx) * z) / fx`
+  - `y = ((cy - v) * z) / fy`
+- Persists the resulting sampled XYZ payload as one local compressed `float32_npz_xyz` artifact per frame-scoped run.
+- Uses deterministic row-major subsampling with a default cap of `20_000` points, so repeated conversions from the same stored depth artifact return the same payload ordering.
+
 ## Coordinate System Convention
 
 - Use a right-handed local camera coordinate system.
 - Document which axis points forward, right, and up.
 - Keep the same convention in backend generation and Three.js rendering.
 
-Recommended convention:
+Chosen convention:
 
 - `+X` right
-- `+Y` down or up, but fixed and documented
+- `+Y` up
 - `+Z` forward
 
-If `+Y` is inverted between backend and Three.js, normalize it in one place only.
+Slice 11 stores this convention explicitly as `camera_local_right_handed_x_right_y_up_z_forward` on each point-cloud artifact.
+
+## Point-Cloud Artifact Contract
+
+Each point-cloud artifact must contain:
+
+- `frame_id`
+- `source_depth_artifact_id`
+- `point_cloud_uri`
+- `point_format`
+- `coordinate_system`
+- `source_point_count`
+- `point_count`
+- `subsample_step`
+- `intrinsics_source`
+- `fx`
+- `fy`
+- `cx`
+- `cy`
 
 ## Alignment Rules
 
@@ -107,6 +138,7 @@ If `+Y` is inverted between backend and Three.js, normalize it in one place only
 - Invalid or negative depth values must be filtered out.
 - Point count should be capped or subsampled for browser performance.
 - Missing depth artifacts should show a clear UI fallback instead of a broken 3D view.
+- Missing point-cloud artifacts should show a clear UI fallback instead of a broken 3D view.
 
 ## Implementation Guidance
 

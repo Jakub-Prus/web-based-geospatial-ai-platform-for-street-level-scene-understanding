@@ -2,23 +2,21 @@ from __future__ import annotations
 
 import json
 import os
+import struct
 import tarfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 
-PNG_PIXEL_BYTES = (
-    b"\x89PNG\r\n\x1a\n"
-    b"\x00\x00\x00\rIHDR"
-    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
-    b"\x1f\x15\xc4\x89"
-    b"\x00\x00\x00\rIDATx\x9cc`\xf8\xcf\xc0\xf0\x1f\x00\x05\x00\x01\xff"
-    b"\x89\x99=\x1d"
-    b"\x00\x00\x00\x00IEND\xaeB`\x82"
-)
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+PNG_IHDR_CHUNK_LENGTH = 13
+PNG_IHDR_CHUNK_NAME = b"IHDR"
+PNG_IHDR_TRAILER = b"\x08\x06\x00\x00\x00\x00\x00\x00\x00"
+PNG_IEND_CHUNK = b"\x00\x00\x00\x00IEND\xaeB`\x82"
 
 
 def _build_bus_payload() -> dict[str, object]:
@@ -62,10 +60,27 @@ def _build_bus_payload() -> dict[str, object]:
     }
 
 
-def _write_frame_metadata(camera_directory: Path, frame_id: str, timestamp: int) -> None:
+def _build_png_bytes(*, width: int, height: int) -> bytes:
+    return (
+        PNG_SIGNATURE
+        + struct.pack(">I", PNG_IHDR_CHUNK_LENGTH)
+        + PNG_IHDR_CHUNK_NAME
+        + struct.pack(">II", width, height)
+        + PNG_IHDR_TRAILER
+        + PNG_IEND_CHUNK
+    )
+
+
+def _write_frame_metadata(
+    camera_directory: Path,
+    frame_id: str,
+    timestamp: int,
+    *,
+    camera_name: str,
+) -> None:
     metadata = {
         "cam_tstamp": timestamp,
-        "cam_name": "front_right",
+        "cam_name": camera_name,
         "image_zoom": 1.0,
         "image_png": f"{frame_id}.png",
         "pcld_npz": f"{frame_id}.npz",
@@ -107,32 +122,47 @@ def load_sample_dataset(
     return int(response.json()["dataset"]["id"])
 
 
-@pytest.fixture()
-def sample_dataset(tmp_path: Path) -> tuple[Path, Path]:
-    sequence_id = "20190401_121727"
+def create_sample_dataset(
+    *,
+    root_path: Path,
+    sequence_id: str = "20190401_121727",
+    camera_name: str = "front_right",
+    frame_timestamps: tuple[tuple[str, int], ...] = (
+        ("20190401121727_camera_frontright_000013460", 1554115910962784),
+        ("20190401121727_camera_frontright_000013461", 1554115911462784),
+    ),
+    image_width: int = 1,
+    image_height: int = 1,
+) -> tuple[Path, Path]:
     camera_directory = (
-        tmp_path
+        root_path
         / "a2d2-subset"
         / "camera_lidar"
         / sequence_id
         / "camera"
-        / "cam_front_right"
+        / f"cam_{camera_name}"
     )
     camera_directory.mkdir(parents=True)
 
-    frame_timestamps = (
-        ("20190401121727_camera_frontright_000013460", 1554115910962784),
-        ("20190401121727_camera_frontright_000013461", 1554115911462784),
-    )
-
+    png_bytes = _build_png_bytes(width=image_width, height=image_height)
     for frame_id, timestamp in frame_timestamps:
-        (camera_directory / f"{frame_id}.png").write_bytes(PNG_PIXEL_BYTES)
-        _write_frame_metadata(camera_directory, frame_id, timestamp)
+        (camera_directory / f"{frame_id}.png").write_bytes(png_bytes)
+        _write_frame_metadata(
+            camera_directory,
+            frame_id,
+            timestamp,
+            camera_name=camera_name,
+        )
 
-    preview_archive_path = tmp_path / "a2d2-preview.tar"
+    preview_archive_path = root_path / "a2d2-preview.tar"
     _create_preview_archive(preview_archive_path, sequence_id)
 
     return camera_directory.parents[3], preview_archive_path
+
+
+@pytest.fixture()
+def sample_dataset(tmp_path: Path) -> tuple[Path, Path]:
+    return create_sample_dataset(root_path=tmp_path)
 
 
 @pytest.fixture()
@@ -156,10 +186,16 @@ def test_client_factory(
             depth_artifacts_directory
             or tmp_path / f"depth-artifacts-{client_count}"
         )
+        resolved_point_cloud_artifacts_directory = (
+            tmp_path / f"point-cloud-artifacts-{client_count}"
+        )
         client_count += 1
         os.environ["ML_FASTAPI_DB_PATH"] = str(resolved_database_path)
         os.environ["ML_FASTAPI_DEPTH_ARTIFACTS_DIR"] = str(
             resolved_depth_artifacts_directory
+        )
+        os.environ["ML_FASTAPI_POINT_CLOUD_ARTIFACTS_DIR"] = str(
+            resolved_point_cloud_artifacts_directory
         )
         app = create_app(
             detector_factory=detector_factory,
@@ -179,6 +215,7 @@ def test_client_factory(
 
     os.environ.pop("ML_FASTAPI_DB_PATH", None)
     os.environ.pop("ML_FASTAPI_DEPTH_ARTIFACTS_DIR", None)
+    os.environ.pop("ML_FASTAPI_POINT_CLOUD_ARTIFACTS_DIR", None)
 
 
 @pytest.fixture()

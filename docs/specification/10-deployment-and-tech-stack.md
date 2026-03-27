@@ -1,6 +1,6 @@
 # 10. Deployment And Tech Stack
 
-Status: Updated after Slice 10
+Status: Updated after Slice 11
 
 ## Technology Stack
 
@@ -13,6 +13,7 @@ Status: Updated after Slice 10
 - Depth inference: MiDaS `DPT_SwinV2_T_256` with pinned `dpt_swin2_tiny_256.pt`
 - Database: PostgreSQL with PostGIS
 - Storage: S3-compatible object storage
+- Current local artifact formats: `.npy` inverse-depth maps and `.npz` point-cloud payloads managed by the FastAPI service
 
 ## Deployment
 

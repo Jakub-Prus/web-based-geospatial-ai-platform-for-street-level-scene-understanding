@@ -18,12 +18,14 @@ from app.config import (
     resolve_default_detection_model_path,
     resolve_default_depth_model_path,
     resolve_depth_artifacts_directory,
+    resolve_point_cloud_artifacts_directory,
     resolve_preview_archive_path,
 )
 from app.database import create_connection, initialize_database
 from app.inference import (
     DETECTION_RUN_TYPE,
     DEPTH_RUN_TYPE,
+    POINT_CLOUD_RUN_TYPE,
     RUN_STATUS_COMPLETED,
     RUN_STATUS_EMPTY,
     RUN_STATUS_FAILED,
@@ -35,6 +37,15 @@ from app.inference import (
     ObjectDetector,
     UltralyticsObjectDetector,
 )
+from app.point_cloud import (
+    DEFAULT_MAX_POINT_COUNT,
+    DEFAULT_POINT_CLOUD_ARTIFACT_FORMAT,
+    POINT_CLOUD_COORDINATE_SYSTEM,
+    convert_depth_map_to_point_cloud,
+    load_point_cloud_artifact,
+    persist_point_cloud_artifact,
+    resolve_camera_intrinsics,
+)
 from app.repository import DatasetRepository
 from app.schemas import (
     DETECTION_SOURCE_CORRECTED,
@@ -43,6 +54,10 @@ from app.schemas import (
     DEPTH_ARTIFACT_STATE_FAILED,
     DEPTH_ARTIFACT_STATE_MISSING,
     DEPTH_ARTIFACT_STATE_RUNNING,
+    POINT_CLOUD_ARTIFACT_STATE_COMPLETED,
+    POINT_CLOUD_ARTIFACT_STATE_FAILED,
+    POINT_CLOUD_ARTIFACT_STATE_MISSING,
+    POINT_CLOUD_ARTIFACT_STATE_RUNNING,
     REVIEW_STATUS_REJECTED,
     DepthArtifactRecord,
     DepthRunRequest,
@@ -59,10 +74,15 @@ from app.schemas import (
     FrameDepthArtifactResponse,
     FrameDetailRecord,
     FrameDetailResponse,
+    FramePointCloudResponse,
     FrameCorrectionsResponse,
     FrameDetectionsResponse,
     FrameListResponse,
     InferenceRunRecord,
+    PointCloudArtifactRecord,
+    PointCloudPayloadRecord,
+    PointCloudPointRecord,
+    PointCloudRunRequest,
     SaveCorrectionRequest,
 )
 
@@ -347,6 +367,149 @@ def build_frame_depth_artifact_response(
     )
 
 
+def load_depth_artifact(
+    *,
+    depth_artifacts_directory: Path,
+    depth_uri: str,
+    image_width: int,
+    image_height: int,
+) -> np.ndarray:
+    depth_artifact_path = (depth_artifacts_directory / depth_uri).resolve()
+    if not depth_artifact_path.is_file():
+        raise FileNotFoundError(
+            f"Stored depth artifact file was not found: {depth_artifact_path}"
+        )
+
+    stored_depth_map = np.load(depth_artifact_path)
+    return validate_depth_prediction(
+        DepthPrediction(depth_map=stored_depth_map),
+        image_width=image_width,
+        image_height=image_height,
+    )
+
+
+def build_point_cloud_payload_record(points: np.ndarray) -> PointCloudPayloadRecord:
+    point_records = [
+        PointCloudPointRecord(
+            x=float(point[0]),
+            y=float(point[1]),
+            z=float(point[2]),
+        )
+        for point in np.asarray(points, dtype=np.float32)
+    ]
+
+    return PointCloudPayloadRecord(points=point_records)
+
+
+def build_frame_point_cloud_response(
+    *,
+    frame_id: str,
+    state: str,
+    detail: str | None,
+    run_record: dict[str, object] | None,
+    artifact_record: dict[str, object] | None,
+    points: np.ndarray | None,
+) -> FramePointCloudResponse:
+    return FramePointCloudResponse(
+        frame_id=frame_id,
+        state=state,
+        detail=detail,
+        run=(
+            InferenceRunRecord.model_validate(run_record)
+            if run_record is not None
+            else None
+        ),
+        artifact=(
+            PointCloudArtifactRecord.model_validate(artifact_record)
+            if artifact_record is not None
+            else None
+        ),
+        payload=(
+            build_point_cloud_payload_record(points)
+            if points is not None
+            else None
+        ),
+    )
+
+
+def build_point_cloud_missing_response_from_depth_state(
+    *,
+    frame_id: str,
+    depth_run_record: dict[str, object] | None,
+    depth_artifact_record: dict[str, object] | None,
+) -> FramePointCloudResponse:
+    if depth_run_record is None:
+        return build_frame_point_cloud_response(
+            frame_id=frame_id,
+            state=POINT_CLOUD_ARTIFACT_STATE_MISSING,
+            detail=(
+                "No stored depth artifact exists for this frame yet. "
+                "Generate depth first before requesting a point cloud."
+            ),
+            run_record=None,
+            artifact_record=None,
+            points=None,
+        )
+
+    depth_run_status = str(depth_run_record["status"])
+    if depth_artifact_record is None:
+        if depth_run_status == RUN_STATUS_RUNNING:
+            return build_frame_point_cloud_response(
+                frame_id=frame_id,
+                state=POINT_CLOUD_ARTIFACT_STATE_RUNNING,
+                detail="Depth inference is still running for this frame.",
+                run_record=depth_run_record,
+                artifact_record=None,
+                points=None,
+            )
+        if depth_run_status == RUN_STATUS_FAILED:
+            return build_frame_point_cloud_response(
+                frame_id=frame_id,
+                state=POINT_CLOUD_ARTIFACT_STATE_FAILED,
+                detail=str(
+                    depth_run_record["error_message"]
+                    or "Depth inference failed for this frame."
+                ),
+                run_record=depth_run_record,
+                artifact_record=None,
+                points=None,
+            )
+
+    return build_frame_point_cloud_response(
+        frame_id=frame_id,
+        state=POINT_CLOUD_ARTIFACT_STATE_MISSING,
+        detail=(
+            "A completed depth run was found, but no stored depth artifact is available "
+            "for point-cloud conversion."
+        ),
+        run_record=depth_run_record,
+        artifact_record=None,
+        points=None,
+    )
+
+
+def resolve_depth_artifact_for_frame(
+    *,
+    repository: DatasetRepository,
+    dataset_id: int,
+    frame_id: str,
+) -> tuple[dict[str, object] | None, dict[str, object] | None]:
+    try:
+        depth_run_record = repository.get_latest_inference_run_for_frame(
+            dataset_id,
+            frame_id,
+            DEPTH_RUN_TYPE,
+        )
+    except KeyError:
+        return None, None
+
+    depth_artifact_record = repository.get_depth_artifact_for_run(
+        inference_run_id=int(depth_run_record["id"]),
+        frame_id=frame_id,
+    )
+    return depth_run_record, depth_artifact_record
+
+
 def create_app(
     detector_factory: DetectorFactory | None = None,
     depth_estimator_factory: DepthEstimatorFactory | None = None,
@@ -354,7 +517,9 @@ def create_app(
     database_path = resolve_database_path()
     initialize_database(database_path)
     depth_artifacts_directory = resolve_depth_artifacts_directory()
+    point_cloud_artifacts_directory = resolve_point_cloud_artifacts_directory()
     depth_artifacts_directory.mkdir(parents=True, exist_ok=True)
+    point_cloud_artifacts_directory.mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(
         title="Geospatial Scene ML API",
@@ -374,6 +539,7 @@ def create_app(
         depth_estimator_factory or default_depth_estimator_factory
     )
     app.state.depth_artifacts_directory = depth_artifacts_directory
+    app.state.point_cloud_artifacts_directory = point_cloud_artifacts_directory
 
     @app.get("/", status_code=HTTPStatus.OK)
     async def read_root() -> dict[str, str]:
@@ -662,6 +828,220 @@ def create_app(
             detail=None,
             run_record=run_record,
             artifact_record=artifact_record,
+        )
+
+    @app.post(
+        "/datasets/{dataset_id}/frames/{frame_id}/point-cloud",
+        response_model=FramePointCloudResponse,
+        status_code=HTTPStatus.CREATED,
+    )
+    async def trigger_point_cloud_generation(
+        dataset_id: int,
+        frame_id: str,
+        request: PointCloudRunRequest | None = None,
+    ) -> FramePointCloudResponse:
+        resolved_request = request or PointCloudRunRequest()
+        max_point_count = resolved_request.max_point_count or DEFAULT_MAX_POINT_COUNT
+        started_at = utc_now_isoformat()
+
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                frame_record = repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+            depth_run_record, depth_artifact_record = resolve_depth_artifact_for_frame(
+                repository=repository,
+                dataset_id=dataset_id,
+                frame_id=frame_id,
+            )
+            if depth_artifact_record is None:
+                return build_point_cloud_missing_response_from_depth_state(
+                    frame_id=frame_id,
+                    depth_run_record=depth_run_record,
+                    depth_artifact_record=depth_artifact_record,
+                )
+
+            run_record = repository.create_inference_run(
+                dataset_id=dataset_id,
+                run_type=POINT_CLOUD_RUN_TYPE,
+                frame_id=frame_id,
+                status=RUN_STATUS_RUNNING,
+                model_name="stored-depth-conversion",
+                model_path=str(depth_artifact_record["depth_uri"]),
+                frame_count=1,
+                started_at=started_at,
+            )
+
+            try:
+                stored_depth_map = load_depth_artifact(
+                    depth_artifacts_directory=app.state.depth_artifacts_directory,
+                    depth_uri=str(depth_artifact_record["depth_uri"]),
+                    image_width=int(frame_record["image_width"]),
+                    image_height=int(frame_record["image_height"]),
+                )
+                intrinsics = resolve_camera_intrinsics(
+                    camera_intrinsics_json=(
+                        None
+                        if frame_record["camera_intrinsics_json"] is None
+                        else str(frame_record["camera_intrinsics_json"])
+                    ),
+                    image_width=int(frame_record["image_width"]),
+                    image_height=int(frame_record["image_height"]),
+                )
+                conversion_result = convert_depth_map_to_point_cloud(
+                    depth_map=stored_depth_map,
+                    intrinsics=intrinsics,
+                    max_point_count=max_point_count,
+                )
+                point_cloud_uri = persist_point_cloud_artifact(
+                    point_cloud_artifacts_directory=app.state.point_cloud_artifacts_directory,
+                    dataset_id=dataset_id,
+                    frame_id=frame_id,
+                    run_id=int(run_record["id"]),
+                    points=conversion_result.points,
+                )
+                artifact_record = repository.save_point_cloud_artifact(
+                    inference_run_id=int(run_record["id"]),
+                    frame_id=frame_id,
+                    source_depth_artifact_id=int(depth_artifact_record["id"]),
+                    point_cloud_uri=point_cloud_uri,
+                    point_format=DEFAULT_POINT_CLOUD_ARTIFACT_FORMAT,
+                    coordinate_system=POINT_CLOUD_COORDINATE_SYSTEM,
+                    source_point_count=conversion_result.source_point_count,
+                    point_count=conversion_result.point_count,
+                    subsample_step=conversion_result.subsample_step,
+                    intrinsics_source=conversion_result.intrinsics.source,
+                    fx=conversion_result.intrinsics.fx,
+                    fy=conversion_result.intrinsics.fy,
+                    cx=conversion_result.intrinsics.cx,
+                    cy=conversion_result.intrinsics.cy,
+                    created_at=utc_now_isoformat(),
+                )
+                completed_run_record = repository.finalize_inference_run(
+                    run_id=int(run_record["id"]),
+                    status=RUN_STATUS_COMPLETED,
+                    processed_frame_count=1,
+                    detection_count=0,
+                    completed_at=utc_now_isoformat(),
+                    detections=[],
+                )
+            except Exception as error:
+                failed_run_record = repository.mark_inference_run_failed(
+                    run_id=int(run_record["id"]),
+                    processed_frame_count=1,
+                    completed_at=utc_now_isoformat(),
+                    error_message=str(error),
+                )
+                return build_frame_point_cloud_response(
+                    frame_id=frame_id,
+                    state=POINT_CLOUD_ARTIFACT_STATE_FAILED,
+                    detail=str(error),
+                    run_record=failed_run_record,
+                    artifact_record=None,
+                    points=None,
+                )
+
+        return build_frame_point_cloud_response(
+            frame_id=frame_id,
+            state=POINT_CLOUD_ARTIFACT_STATE_COMPLETED,
+            detail=None,
+            run_record=completed_run_record,
+            artifact_record=artifact_record,
+            points=conversion_result.points,
+        )
+
+    @app.get(
+        "/datasets/{dataset_id}/frames/{frame_id}/point-cloud",
+        response_model=FramePointCloudResponse,
+        status_code=HTTPStatus.OK,
+    )
+    async def get_frame_point_cloud(
+        dataset_id: int,
+        frame_id: str,
+    ) -> FramePointCloudResponse:
+        with closing(create_connection(app.state.database_path)) as connection:
+            repository = DatasetRepository(connection)
+            try:
+                repository.get_frame(dataset_id, frame_id)
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Frame {frame_id} was not found in dataset {dataset_id}.",
+                ) from error
+
+            try:
+                run_record = repository.get_latest_inference_run_for_frame(
+                    dataset_id,
+                    frame_id,
+                    POINT_CLOUD_RUN_TYPE,
+                )
+            except KeyError:
+                depth_run_record, depth_artifact_record = resolve_depth_artifact_for_frame(
+                    repository=repository,
+                    dataset_id=dataset_id,
+                    frame_id=frame_id,
+                )
+                return build_point_cloud_missing_response_from_depth_state(
+                    frame_id=frame_id,
+                    depth_run_record=depth_run_record,
+                    depth_artifact_record=depth_artifact_record,
+                )
+
+            artifact_record = repository.get_point_cloud_artifact_for_run(
+                inference_run_id=int(run_record["id"]),
+                frame_id=frame_id,
+            )
+
+        run_status = str(run_record["status"])
+        if artifact_record is None:
+            if run_status == RUN_STATUS_RUNNING:
+                state = POINT_CLOUD_ARTIFACT_STATE_RUNNING
+                detail = "Point-cloud generation is still running for this frame."
+            elif run_status == RUN_STATUS_FAILED:
+                state = POINT_CLOUD_ARTIFACT_STATE_FAILED
+                detail = str(
+                    run_record["error_message"] or "Point-cloud generation failed."
+                )
+            else:
+                state = POINT_CLOUD_ARTIFACT_STATE_MISSING
+                detail = "The latest point-cloud run did not persist an artifact."
+
+            return build_frame_point_cloud_response(
+                frame_id=frame_id,
+                state=state,
+                detail=detail,
+                run_record=run_record,
+                artifact_record=None,
+                points=None,
+            )
+
+        try:
+            points = load_point_cloud_artifact(
+                point_cloud_artifacts_directory=app.state.point_cloud_artifacts_directory,
+                point_cloud_uri=str(artifact_record["point_cloud_uri"]),
+            )
+        except Exception as error:
+            return build_frame_point_cloud_response(
+                frame_id=frame_id,
+                state=POINT_CLOUD_ARTIFACT_STATE_FAILED,
+                detail=str(error),
+                run_record=run_record,
+                artifact_record=artifact_record,
+                points=None,
+            )
+
+        return build_frame_point_cloud_response(
+            frame_id=frame_id,
+            state=POINT_CLOUD_ARTIFACT_STATE_COMPLETED,
+            detail=None,
+            run_record=run_record,
+            artifact_record=artifact_record,
+            points=points,
         )
 
     @app.post(

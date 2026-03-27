@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.point_cloud import MAX_POINT_COUNT
+
 REVIEW_STATUS_PENDING = "pending"
 REVIEW_STATUS_APPROVED = "approved"
 REVIEW_STATUS_REJECTED = "rejected"
@@ -13,6 +15,10 @@ DEPTH_ARTIFACT_STATE_MISSING = "missing"
 DEPTH_ARTIFACT_STATE_RUNNING = "running"
 DEPTH_ARTIFACT_STATE_COMPLETED = "completed"
 DEPTH_ARTIFACT_STATE_FAILED = "failed"
+POINT_CLOUD_ARTIFACT_STATE_MISSING = "missing"
+POINT_CLOUD_ARTIFACT_STATE_RUNNING = "running"
+POINT_CLOUD_ARTIFACT_STATE_COMPLETED = "completed"
+POINT_CLOUD_ARTIFACT_STATE_FAILED = "failed"
 
 ReviewStatus = Literal[
     REVIEW_STATUS_PENDING,
@@ -29,6 +35,12 @@ DepthArtifactState = Literal[
     DEPTH_ARTIFACT_STATE_COMPLETED,
     DEPTH_ARTIFACT_STATE_FAILED,
 ]
+PointCloudArtifactState = Literal[
+    POINT_CLOUD_ARTIFACT_STATE_MISSING,
+    POINT_CLOUD_ARTIFACT_STATE_RUNNING,
+    POINT_CLOUD_ARTIFACT_STATE_COMPLETED,
+    POINT_CLOUD_ARTIFACT_STATE_FAILED,
+]
 
 
 class DatasetLoadRequest(BaseModel):
@@ -43,6 +55,10 @@ class DetectionRunRequest(BaseModel):
 
 class DepthRunRequest(BaseModel):
     model_path: str | None = None
+
+
+class PointCloudRunRequest(BaseModel):
+    max_point_count: int | None = Field(default=None, ge=1, le=MAX_POINT_COUNT)
 
 
 class CorrectionPatchInput(BaseModel):
@@ -175,6 +191,44 @@ class FrameDepthArtifactResponse(BaseModel):
     detail: str | None = None
     run: InferenceRunRecord | None = None
     artifact: DepthArtifactRecord | None = None
+
+
+class PointCloudArtifactRecord(BaseModel):
+    id: int
+    inference_run_id: int
+    frame_id: str
+    source_depth_artifact_id: int
+    point_cloud_uri: str
+    point_format: str
+    coordinate_system: str
+    source_point_count: int
+    point_count: int
+    subsample_step: int
+    intrinsics_source: str
+    fx: float
+    fy: float
+    cx: float
+    cy: float
+    created_at: str
+
+
+class PointCloudPointRecord(BaseModel):
+    x: float
+    y: float
+    z: float
+
+
+class PointCloudPayloadRecord(BaseModel):
+    points: list[PointCloudPointRecord] = Field(default_factory=list)
+
+
+class FramePointCloudResponse(BaseModel):
+    frame_id: str
+    state: PointCloudArtifactState
+    detail: str | None = None
+    run: InferenceRunRecord | None = None
+    artifact: PointCloudArtifactRecord | None = None
+    payload: PointCloudPayloadRecord | None = None
 
 
 class DetectionRecord(BaseModel):

@@ -15,6 +15,7 @@ DEFAULT_DEPTH_MODEL_PATH = REPO_ROOT / "data" / "raw" / "models" / "dpt_swin2_ti
 DEFAULT_DB_DIRECTORY = SERVICE_DIR / "data"
 DEFAULT_DB_PATH = DEFAULT_DB_DIRECTORY / "platform.db"
 DEFAULT_DEPTH_ARTIFACTS_DIRECTORY = DEFAULT_DB_DIRECTORY / "depth-artifacts"
+DEFAULT_POINT_CLOUD_ARTIFACTS_DIRECTORY = DEFAULT_DB_DIRECTORY / "point-cloud-artifacts"
 
 
 def resolve_database_path() -> Path:
@@ -63,3 +64,11 @@ def resolve_depth_artifacts_directory() -> Path:
         return Path(configured_path).resolve()
 
     return DEFAULT_DEPTH_ARTIFACTS_DIRECTORY
+
+
+def resolve_point_cloud_artifacts_directory() -> Path:
+    configured_path = os.getenv("ML_FASTAPI_POINT_CLOUD_ARTIFACTS_DIR")
+    if configured_path:
+        return Path(configured_path).resolve()
+
+    return DEFAULT_POINT_CLOUD_ARTIFACTS_DIRECTORY

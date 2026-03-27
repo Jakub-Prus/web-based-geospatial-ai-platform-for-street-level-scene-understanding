@@ -1,6 +1,6 @@
 # 08. APIs And Interfaces
 
-Status: Updated for implemented Slices 3-10
+Status: Updated for implemented Slices 3-11
 
 ## FastAPI Surface Implemented Today
 
@@ -46,6 +46,15 @@ The POST depth endpoint runs MiDaS inference for one selected frame, persists on
 
 The GET depth endpoint returns a `missing`, `running`, `completed`, or `failed` state plus optional run and artifact metadata so later UI slices can render a clear fallback instead of assuming a depth artifact exists.
 
+### Point-Cloud Endpoints
+
+- `POST /datasets/{dataset_id}/frames/{frame_id}/point-cloud`
+- `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud`
+
+The POST point-cloud endpoint reads the latest stored depth artifact for one frame, converts valid inverse-depth pixels into local XYZ coordinates, deterministically subsamples the result to a caller-provided or default cap, and persists one compressed point-cloud artifact plus inline payload metadata.
+
+The GET point-cloud endpoint returns a `missing`, `running`, `completed`, or `failed` state plus optional run metadata, artifact metadata, and inline sampled `points` data for the latest frame-scoped point-cloud conversion run.
+
 ## Thin .NET Bridge Surface
 
 The bridge remains intentionally small in Slice 5:
@@ -57,7 +66,6 @@ The bridge remains intentionally small in Slice 5:
 
 These interfaces remain planned but are not implemented yet:
 
-- point-cloud endpoints
 - metrics endpoints
 - export endpoints
 
@@ -66,9 +74,11 @@ These interfaces remain planned but are not implemented yet:
 - FastAPI is the client-facing backend for the current MVP slices.
 - Detection runs include explicit run type, model version, processing counts, and status.
 - Depth runs reuse the shared run metadata model and add optional frame scope through `run.frame_id`.
+- Point-cloud runs reuse the shared run metadata model, remain frame-scoped, and record the source stored-depth artifact URI in `run.model_path`.
 - Detection payloads remain stable enough for replayable frontend overlays.
 - Correction payloads preserve original model detections and never overwrite raw detection rows.
 - Depth payloads expose width, height, `depth_format`, and `depth_scale` so later 3D slices do not need to infer artifact semantics from file names.
+- Point-cloud payloads expose a documented local coordinate system, stored intrinsics, deterministic `subsample_step`, `point_count`, `source_point_count`, and inline XYZ point records so the Three.js slice can stay thin.
 - The .NET bridge consumes summary-level metadata only and does not duplicate FastAPI write ownership.
 
 ## Example Flow
@@ -82,7 +92,8 @@ These interfaces remain planned but are not implemented yet:
 7. User edits one selected box in the image viewer and the frontend clips the box to image bounds before save.
 8. Frontend posts the updated label and bounding box to `POST /datasets/{dataset_id}/frames/{frame_id}/detections/{detection_id}/correction`.
 9. Frontend or a script can trigger `POST /datasets/{dataset_id}/frames/{frame_id}/depth` for one selected frame and read the current depth state through `GET /datasets/{dataset_id}/frames/{frame_id}/depth`.
-10. Future slices add point-cloud conversion, 3D rendering, metrics, and export.
+10. Frontend or a script can trigger `POST /datasets/{dataset_id}/frames/{frame_id}/point-cloud` and read the latest inline XYZ payload through `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud`.
+11. Future slices add Three.js rendering, metrics, and export.
 
 ## Required Payload Contracts
 
@@ -91,6 +102,7 @@ These interfaces remain planned but are not implemented yet:
 - Bounding boxes remain in `x_min`, `y_min`, `x_max`, `y_max` image coordinates until the frontend scales them for display.
 - Correction records include review status plus separate original, corrected, and effective detection state.
 - Depth artifact records include `depth_uri`, `width`, `height`, `depth_format`, and `depth_scale`, and the backend rejects artifacts whose stored shape does not match the source frame dimensions.
+- Point-cloud artifact records include `point_cloud_uri`, `point_format`, `coordinate_system`, `source_point_count`, `point_count`, `subsample_step`, and the exact `fx`, `fy`, `cx`, and `cy` values used for generation.
 
 ## External Integrations
 

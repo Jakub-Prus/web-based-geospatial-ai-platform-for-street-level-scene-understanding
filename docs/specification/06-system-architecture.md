@@ -1,6 +1,6 @@
 # 06. System Architecture
 
-Status: Updated after Slice 10
+Status: Updated after Slice 11
 
 ## High-Level Components
 
@@ -28,6 +28,7 @@ Status: Updated after Slice 10
 - Serves lightweight dataset and run metadata needed by the frontend
 - Persists review corrections separately from raw model detections
 - Persists one validated local depth artifact per selected frame for later 3D slices
+- Converts stored depth artifacts into persisted local point-cloud payloads for later Three.js rendering
 
 ### .NET Bridge Service
 
@@ -41,7 +42,7 @@ Status: Updated after Slice 10
 2. FastAPI validates the dataset and stores metadata references.
 3. Files are persisted in object storage and indexed in PostgreSQL/PostGIS.
 4. FastAPI runs or schedules inference and depth processing.
-5. Detection outputs are stored in SQLite and depth artifacts are stored as local `.npy` files plus SQLite metadata for later map, image, and 3D rendering.
+5. Detection outputs are stored in SQLite, depth artifacts are stored as local `.npy` files, and point-cloud artifacts are stored as local `.npz` files plus SQLite metadata for later map, image, and 3D rendering.
 6. Optional .NET bridge reads run metadata and exposes summary endpoints.
 7. Frontend retrieves map data, imagery references, detections, depth-derived geometry, and review state.
 8. User selects one detection, edits or redraws the box inside the image bounds, and saves corrections through the FastAPI service.
@@ -51,6 +52,7 @@ Status: Updated after Slice 10
 
 - The implemented MVP slices currently persist dataset, detection, and correction metadata in a local SQLite database inside the FastAPI service for fast iteration.
 - Slice 10 adds `depth_artifacts` metadata in the same SQLite database and keeps the depth array itself on local disk under a service-managed artifact directory.
+- Slice 11 adds `point_cloud_artifacts` metadata in the same SQLite database and keeps the sampled XYZ payload itself on local disk under a second service-managed artifact directory.
 - PostgreSQL plus PostGIS remain part of the target Docker and deployment architecture for later slices that need richer geospatial storage.
 
 ## Data Lifecycle

@@ -1,6 +1,6 @@
 # 18. Codex Implementation Slices
 
-Status: Active implementation plan, updated after Slice 10
+Status: Active implementation plan, updated after Slice 11
 
 ## Purpose
 
@@ -470,6 +470,8 @@ Current result:
 
 ## Slice 11: Point-Cloud Conversion
 
+Status: Implemented
+
 ### Goal
 
 Turn stored depth into a point-cloud payload.
@@ -499,6 +501,14 @@ Turn stored depth into a point-cloud payload.
 ### Stop Condition
 
 - One frame returns a valid point-cloud payload in the agreed coordinate system.
+
+Current result:
+
+- FastAPI now exposes `POST /datasets/{dataset_id}/frames/{frame_id}/point-cloud` and `GET /datasets/{dataset_id}/frames/{frame_id}/point-cloud`.
+- The backend converts the latest stored frame-scoped depth artifact into a right-handed local camera payload using `+X` right, `+Y` up, and `+Z` forward.
+- Invalid inverse-depth values are filtered before conversion and the remaining valid points are deterministically subsampled with a browser-safe default cap of `20_000` points.
+- Successful runs persist one local compressed `float32_npz_xyz` artifact per frame plus SQLite metadata in `point_cloud_artifacts`.
+- Verified Slice 11 stop condition: repeated conversions of the same stored depth artifact return the same ordered XYZ payload in the agreed coordinate system.
 
 ## Slice 12: Three.js Viewer
 
